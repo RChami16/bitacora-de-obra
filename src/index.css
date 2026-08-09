@@ -1,0 +1,133 @@
+:root {
+  /* Paleta "obra amigable": naranja casco de seguridad + grises concreto,
+     sobre un fondo cálido en vez de blanco puro/gris frío de oficina. */
+  --accent: #e67e22;
+  --accent-dark: #c8690f;
+  --accent-bg: rgba(230, 126, 34, 0.12);
+
+  --bg: #faf6f0;
+  --surface: #ffffff;
+  --text: #2d3436;
+  --text-muted: #6b6560;
+  --border: #e4ddd2;
+
+  --success: #27ae60;
+  --pending: #f39c12;
+  --danger: #c0392b;
+
+  --shadow: 0 2px 8px rgba(45, 52, 54, 0.08);
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  font: 17px/150% var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #f39c4a;
+    --accent-dark: #e67e22;
+    --accent-bg: rgba(243, 156, 74, 0.15);
+
+    --bg: #1c1a17;
+    --surface: #262320;
+    --text: #f0ece5;
+    --text-muted: #b3aca3;
+    --border: #3a352e;
+
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+/* Botones grandes, pensados para usarse con dedos (o guantes) en obra. */
+button {
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  min-height: 56px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  padding: 14px 20px;
+  touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+button.primary:active {
+  background: var(--accent-dark);
+}
+
+button.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+input, textarea, select {
+  font: inherit;
+  font-size: 17px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* El control nativo de fecha/hora puede pedir más ancho del disponible en
+   pantallas angostas si el texto es muy grande; 16px es el mínimo que
+   además evita que iOS haga zoom automático al enfocar el campo. */
+input[type="datetime-local"] {
+  font-size: 16px;
+  padding: 12px 8px;
+}
+
+label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 6px;
+}
