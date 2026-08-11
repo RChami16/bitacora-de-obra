@@ -489,17 +489,25 @@ function HomeScreen({
   obras,
   cargando,
   userId,
+  vistaHome,
+  onCambiarVistaHome,
   onEntrarObra,
+  onEntrarDesdeSupervision,
   onCambiaronObras,
 }: {
   obras: Obra[] | null
   cargando: boolean
   userId: string
+  /** Vive en el componente padre (no aquí) para que "volver a Supervisión"
+   * desde dentro de una obra pueda regresar directo a esa pestaña, en vez
+   * de perderse cada vez que esta pantalla se vuelve a montar. */
+  vistaHome: 'obras' | 'supervision'
+  onCambiarVistaHome: (vista: 'obras' | 'supervision') => void
   onEntrarObra: (id: string) => void
+  onEntrarDesdeSupervision: (entrada: EntradaConObra) => void
   onCambiaronObras: () => void
 }) {
   const [formulario, setFormulario] = useState<'nueva' | string | null>(null)
-  const [vistaHome, setVistaHome] = useState<'obras' | 'supervision'>('obras')
 
   if (formulario !== null) {
     const editando = typeof formulario === 'string' ? obras?.find((o) => o.id === formulario) : undefined
@@ -529,14 +537,14 @@ function HomeScreen({
         <button
           type="button"
           className={`tab ${vistaHome === 'obras' ? 'tab-activa' : ''}`}
-          onClick={() => setVistaHome('obras')}
+          onClick={() => onCambiarVistaHome('obras')}
         >
           Mis obras
         </button>
         <button
           type="button"
           className={`tab ${vistaHome === 'supervision' ? 'tab-activa' : ''}`}
-          onClick={() => setVistaHome('supervision')}
+          onClick={() => onCambiarVistaHome('supervision')}
         >
           <IconOjo size={15} />
           Supervisión
@@ -544,7 +552,7 @@ function HomeScreen({
       </div>
 
       {vistaHome === 'supervision' ? (
-        <ModoSupervision obras={obras} onEntrarObra={onEntrarObra} />
+        <ModoSupervision obras={obras} onEntrarEntrada={onEntrarDesdeSupervision} />
       ) : (
         <>
           {cargando && <p className="empty-state">Cargando tus obras…</p>}
@@ -594,10 +602,10 @@ function SupervisionFotoGrande({ ruta, extra }: { ruta: string; extra: number })
  * tarjeta entra directo a esa obra. */
 function ModoSupervision({
   obras,
-  onEntrarObra,
+  onEntrarEntrada,
 }: {
   obras: Obra[] | null
-  onEntrarObra: (id: string) => void
+  onEntrarEntrada: (entrada: EntradaConObra) => void
 }) {
   const [obraId, setObraId] = useState('')
   const [tipo, setTipo] = useState<TipoEntrada>('nota')
@@ -660,7 +668,7 @@ function ModoSupervision({
       {!cargando && !error && entradasFiltradas.length > 0 && (
         <div className="supervision-lista">
           {entradasFiltradas.map((e) => (
-            <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarObra(e.obraId)}>
+            <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarEntrada(e)}>
               {e.fotos[0] && <SupervisionFotoGrande ruta={e.fotos[0]} extra={e.fotos.length - 1} />}
               <div className="supervision-card-cuerpo">
                 <div className="supervision-card-cabecera">
@@ -1477,6 +1485,8 @@ function ListaPorSemanas({
   obraId,
   tipo,
   lista,
+  semanaInicial,
+  onSemanaInicialConsumida,
   onBorrar,
   onCambiarEstado,
   onReintentar,
@@ -1484,6 +1494,12 @@ function ListaPorSemanas({
   obraId: string
   tipo: TipoEntrada
   lista: { vistas: EntradaVista[]; cargando: boolean }
+  /** Si se da, abre esta semana de una vez en vez de la lista de carpetas
+   * (p.ej. al entrar desde el Modo supervisión, directo a la entrada que se
+   * tocó). Se avisa con `onSemanaInicialConsumida` para no reabrirla otra
+   * vez si luego se cambia de pestaña o se navega dentro de la obra. */
+  semanaInicial?: string | null
+  onSemanaInicialConsumida?: () => void
   onBorrar: (entrada: EntradaVista) => void
   onCambiarEstado?: (entrada: EntradaVista, estado: EstadoObservacion) => void
   onReintentar: () => void
@@ -1492,10 +1508,12 @@ function ListaPorSemanas({
   const [semanaAbierta, setSemanaAbierta] = useState<string | null>(null)
 
   useEffect(() => {
-    setSemanaAbierta(null)
+    setSemanaAbierta(semanaInicial ?? null)
+    if (semanaInicial) onSemanaInicialConsumida?.()
     listarNombresSemana(obraId, tipo)
       .then(setNombres)
       .catch((err) => console.error('No se pudieron cargar los nombres de las semanas:', err))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [obraId, tipo])
 
   async function renombrar(clave: string) {
@@ -1620,6 +1638,9 @@ function AppAutenticada({ session }: { session: Session }) {
   const [obras, setObras] = useState<Obra[] | null>(null)
   const [cargandoObras, setCargandoObras] = useState(true)
   const [pestana, setPestana] = useState<TipoEntrada>('nota')
+  const [vistaHome, setVistaHome] = useState<'obras' | 'supervision'>('obras')
+  const [saltoSemana, setSaltoSemana] = useState<string | null>(null)
+  const [origenSupervision, setOrigenSupervision] = useState(false)
   const [formAbierto, setFormAbierto] = useState(false)
   const [generandoReporte, setGenerandoReporte] = useState<'semana' | 'mes' | null>(null)
   const [reportePendiente, setReportePendiente] = useState<{
@@ -1654,6 +1675,22 @@ function AppAutenticada({ session }: { session: Session }) {
     setObraActiva(obras?.find((o) => o.id === id) ?? null)
     setVista('obra-menu')
     setPestana('nota')
+    setOrigenSupervision(false)
+    setFormAbierto(false)
+    setReportePendiente(null)
+  }
+
+  /** Al tocar una tarjeta en Modo supervisión: entra directo a esa obra, en
+   * la pestaña (notas/observaciones) y la semana de esa entrada — sin pasar
+   * por el menú de la obra — y recuerda que hay que poder volver a
+   * Supervisión con un solo botón. */
+  function entrarDesdeSupervision(entrada: EntradaConObra) {
+    setObraActivaId(entrada.obraId)
+    setObraActiva(obras?.find((o) => o.id === entrada.obraId) ?? null)
+    setPestana(entrada.tipo)
+    setSaltoSemana(claveSemana(entrada.fecha))
+    setOrigenSupervision(true)
+    setVista('diario')
     setFormAbierto(false)
     setReportePendiente(null)
   }
@@ -1668,6 +1705,25 @@ function AppAutenticada({ session }: { session: Session }) {
     setVista('obra-menu')
     setFormAbierto(false)
     setReportePendiente(null)
+  }
+
+  /** El botón "←" del encabezado: si se entró desde Supervisión, un solo
+   * toque regresa directo ahí (saltándose el menú de la obra); si no, sube
+   * un nivel como siempre. */
+  function volverAtras() {
+    if (vista === 'diario' && origenSupervision) {
+      setOrigenSupervision(false)
+      setVista('inicio')
+      setVistaHome('supervision')
+      setFormAbierto(false)
+      setReportePendiente(null)
+      return
+    }
+    if (vista === 'diario') {
+      volverAMenuObra()
+      return
+    }
+    volverAInicio()
   }
 
   function volverAInicio() {
@@ -1800,8 +1856,14 @@ function AppAutenticada({ session }: { session: Session }) {
           <button
             type="button"
             className="back-btn"
-            onClick={vista === 'diario' ? volverAMenuObra : volverAInicio}
-            aria-label={vista === 'diario' ? 'Volver al menú de la obra' : 'Volver a mis obras'}
+            onClick={volverAtras}
+            aria-label={
+              vista === 'diario' && origenSupervision
+                ? 'Volver a Supervisión'
+                : vista === 'diario'
+                  ? 'Volver al menú de la obra'
+                  : 'Volver a mis obras'
+            }
           >
             ←
           </button>
@@ -1829,7 +1891,10 @@ function AppAutenticada({ session }: { session: Session }) {
           obras={obras}
           cargando={cargandoObras}
           userId={session.user.id}
+          vistaHome={vistaHome}
+          onCambiarVistaHome={setVistaHome}
           onEntrarObra={entrarAObra}
+          onEntrarDesdeSupervision={entrarDesdeSupervision}
           onCambiaronObras={cargarObras}
         />
       )}
@@ -1912,6 +1977,8 @@ function AppAutenticada({ session }: { session: Session }) {
                 obraId={obraActivaId}
                 tipo={pestana}
                 lista={listaActiva}
+                semanaInicial={saltoSemana}
+                onSemanaInicialConsumida={() => setSaltoSemana(null)}
                 onBorrar={borrarEntrada}
                 onCambiarEstado={pestana === 'observacion' ? cambiarEstadoObservacion : undefined}
                 onReintentar={() => listaActiva.reintentarAhora()}
