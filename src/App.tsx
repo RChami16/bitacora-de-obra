@@ -600,6 +600,7 @@ function ModoSupervision({
   onEntrarObra: (id: string) => void
 }) {
   const [obraId, setObraId] = useState('')
+  const [tipo, setTipo] = useState<TipoEntrada>('nota')
   const [entradas, setEntradas] = useState<EntradaConObra[] | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(false)
@@ -616,6 +617,8 @@ function ModoSupervision({
       .finally(() => setCargando(false))
   }, [obraId])
 
+  const entradasFiltradas = (entradas ?? []).filter((e) => e.tipo === tipo)
+
   return (
     <div className="supervision">
       <div className="field">
@@ -631,17 +634,32 @@ function ModoSupervision({
         <p className="field-hint">Notas de hoy y ayer, más las observaciones que sigan sin atender.</p>
       </div>
 
+      <div className="tabs">
+        <button type="button" className={`tab ${tipo === 'nota' ? 'tab-activa' : ''}`} onClick={() => setTipo('nota')}>
+          Entradas
+        </button>
+        <button
+          type="button"
+          className={`tab ${tipo === 'observacion' ? 'tab-activa' : ''}`}
+          onClick={() => setTipo('observacion')}
+        >
+          Observaciones
+        </button>
+      </div>
+
       {cargando && <p className="empty-state">Cargando…</p>}
       {!cargando && error && (
         <p className="empty-state">No se pudo cargar. Revisa tu conexión e intenta de nuevo.</p>
       )}
-      {!cargando && !error && entradas && entradas.length === 0 && (
-        <p className="empty-state">Sin novedades: nada nuevo hoy ni ayer, y ninguna observación pendiente.</p>
+      {!cargando && !error && entradasFiltradas.length === 0 && (
+        <p className="empty-state">
+          {tipo === 'nota' ? 'No hay notas nuevas hoy ni ayer.' : 'No hay observaciones pendientes.'}
+        </p>
       )}
 
-      {!cargando && !error && entradas && entradas.length > 0 && (
+      {!cargando && !error && entradasFiltradas.length > 0 && (
         <div className="supervision-lista">
-          {entradas.map((e) => (
+          {entradasFiltradas.map((e) => (
             <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarObra(e.obraId)}>
               {e.fotos[0] && <SupervisionFotoGrande ruta={e.fotos[0]} extra={e.fotos.length - 1} />}
               <div className="supervision-card-cuerpo">
