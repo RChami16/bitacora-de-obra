@@ -485,27 +485,84 @@ button.secondary.small {
   box-shadow: var(--shadow);
 }
 
-/* --- Modo supervisión: tarjeta de una entrada de cualquier obra --- */
+/* --- Modo supervisión: selector de obra + tarjetas con foto grande --- */
+.supervision {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.supervision-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .supervision-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px;
+  border-radius: 16px;
+  overflow: hidden;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
   box-shadow: var(--shadow);
   text-align: left;
   color: var(--text);
   width: 100%;
+  padding: 0;
+  min-height: auto;
+}
+
+.supervision-foto-grande {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--bg);
+}
+
+.supervision-foto-grande img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.supervision-foto-cargando {
+  width: 100%;
+  height: 100%;
+}
+
+.supervision-foto-grande .entry-thumb-badge {
+  top: auto;
+  bottom: 8px;
+  right: 8px;
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.supervision-card-cuerpo {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.supervision-card-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .supervision-card-obra {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent-dark);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Estatus de subida: iconito chico en la esquina, no un texto largo --- */

@@ -14,7 +14,7 @@ import { listarObras, crearObra, actualizarObra, eliminarObra, type Obra } from 
 import { listarMiembros, invitarMiembro, quitarMiembro, type Miembro } from './miembrosApi'
 import {
   listarEntradas,
-  listarEntradasRecientes,
+  listarEntradasSupervision,
   crearEntrada,
   subirFotosDeEntrada,
   actualizarEstadoObservacion,
@@ -544,7 +544,7 @@ function HomeScreen({
       </div>
 
       {vistaHome === 'supervision' ? (
-        <ModoSupervision onEntrarObra={onEntrarObra} />
+        <ModoSupervision obras={obras} onEntrarObra={onEntrarObra} />
       ) : (
         <>
           {cargando && <p className="empty-state">Cargando tus obras…</p>}
@@ -574,11 +574,32 @@ function HomeScreen({
   )
 }
 
-/** "Modo supervisión": las notas/observaciones más recientes de TODAS las
- * obras a las que se tiene acceso, juntas en un solo lugar — para no tener
- * que entrar obra por obra a buscar qué se hizo hoy en cada una. Tocar una
+/** Muestra en grande la primera foto de una entrada del modo supervisión
+ * (a diferencia de `EntradaThumbRemota`, que es chica — aquí se pidió
+ * expresamente que la foto se vea más grande que el resto de la tarjeta). */
+function SupervisionFotoGrande({ ruta, extra }: { ruta: string; extra: number }) {
+  const blob = useFotoRemota(ruta)
+  const url = useBlobUrl(blob)
+  return (
+    <div className="supervision-foto-grande">
+      {url ? <img src={url} alt="" /> : <div className="supervision-foto-cargando" />}
+      {extra > 0 && <span className="entry-thumb-badge">+{extra}</span>}
+    </div>
+  )
+}
+
+/** "Modo supervisión": el avance reciente (notas de hoy y ayer) más las
+ * observaciones todavía sin atender, de una obra en concreto o de todas —
+ * para no tener que entrar obra por obra a buscar qué se hizo. Tocar una
  * tarjeta entra directo a esa obra. */
-function ModoSupervision({ onEntrarObra }: { onEntrarObra: (id: string) => void }) {
+function ModoSupervision({
+  obras,
+  onEntrarObra,
+}: {
+  obras: Obra[] | null
+  onEntrarObra: (id: string) => void
+}) {
+  const [obraId, setObraId] = useState('')
   const [entradas, setEntradas] = useState<EntradaConObra[] | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState(false)
@@ -586,46 +607,64 @@ function ModoSupervision({ onEntrarObra }: { onEntrarObra: (id: string) => void 
   useEffect(() => {
     setCargando(true)
     setError(false)
-    listarEntradasRecientes(40)
+    listarEntradasSupervision(obraId || undefined)
       .then(setEntradas)
       .catch((err) => {
         console.error('No se pudieron cargar las últimas entradas de tus obras:', err)
         setError(true)
       })
       .finally(() => setCargando(false))
-  }, [])
-
-  if (cargando) return <p className="empty-state">Cargando la actividad de tus obras…</p>
-  if (error) return <p className="empty-state">No se pudo cargar. Revisa tu conexión e intenta de nuevo.</p>
-  if (!entradas || entradas.length === 0) {
-    return <p className="empty-state">Todavía no hay notas ni observaciones en tus obras.</p>
-  }
+  }, [obraId])
 
   return (
-    <div className="entry-list">
-      {entradas.map((e) => (
-        <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarObra(e.obraId)}>
-          {e.fotos[0] ? (
-            <EntradaThumbRemota ruta={e.fotos[0]} extra={e.fotos.length - 1} />
-          ) : (
-            <ObraIcono nombre={e.obraNombre} color={e.obraColor} imagenSrc={e.obraImagenUrl} tamano={56} />
-          )}
-          <div className="entry-body">
-            <div className="supervision-card-obra">{e.obraNombre}</div>
-            <div className="entry-date">{formatFecha(e.fecha)}</div>
-            {e.texto && <div className="entry-note">{e.texto}</div>}
-            {e.tipo === 'observacion' && e.estado && (
-              <span className={`estado-badge estado-${e.estado}`}>{etiquetaEstado(e.estado)}</span>
-            )}
-            {e.autorEmail && (
-              <div className="entry-autor">
-                <IconUsuario size={12} />
-                {e.autorEmail}
+    <div className="supervision">
+      <div className="field">
+        <label htmlFor="supervision-obra">Obra</label>
+        <select id="supervision-obra" value={obraId} onChange={(e) => setObraId(e.target.value)}>
+          <option value="">Todas las obras</option>
+          {obras?.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.nombre}
+            </option>
+          ))}
+        </select>
+        <p className="field-hint">Notas de hoy y ayer, más las observaciones que sigan sin atender.</p>
+      </div>
+
+      {cargando && <p className="empty-state">Cargando…</p>}
+      {!cargando && error && (
+        <p className="empty-state">No se pudo cargar. Revisa tu conexión e intenta de nuevo.</p>
+      )}
+      {!cargando && !error && entradas && entradas.length === 0 && (
+        <p className="empty-state">Sin novedades: nada nuevo hoy ni ayer, y ninguna observación pendiente.</p>
+      )}
+
+      {!cargando && !error && entradas && entradas.length > 0 && (
+        <div className="supervision-lista">
+          {entradas.map((e) => (
+            <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarObra(e.obraId)}>
+              {e.fotos[0] && <SupervisionFotoGrande ruta={e.fotos[0]} extra={e.fotos.length - 1} />}
+              <div className="supervision-card-cuerpo">
+                <div className="supervision-card-cabecera">
+                  <ObraIcono nombre={e.obraNombre} color={e.obraColor} imagenSrc={e.obraImagenUrl} tamano={22} />
+                  <span className="supervision-card-obra">{e.obraNombre}</span>
+                  <span className="entry-date">{formatFecha(e.fecha)}</span>
+                </div>
+                {e.tipo === 'observacion' && e.estado && (
+                  <span className={`estado-badge estado-${e.estado}`}>{etiquetaEstado(e.estado)}</span>
+                )}
+                {e.texto && <p className="entry-note">{e.texto}</p>}
+                {e.autorEmail && (
+                  <div className="entry-autor">
+                    <IconUsuario size={12} />
+                    {e.autorEmail}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </button>
-      ))}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -70,16 +70,33 @@ interface EntradaFilaConObra extends EntradaFila {
   obras: { nombre: string; color: string; imagen_url: string | null } | null
 }
 
-/** Las N notas/observaciones más recientes de TODAS las obras del usuario
- * (propias o compartidas), sin importar de cuál sean — RLS ya se encarga de
- * que solo salgan las de obras a las que tiene acceso, así que no hay que
- * pedir la lista de obras aparte ni hacer N consultas. */
-export async function listarEntradasRecientes(limite = 40): Promise<EntradaConObra[]> {
-  const { data, error } = await supabase
+/** Medianoche de ayer, en hora local — para el "Modo supervisión": las
+ * notas de hoy y ayer se consideran "recientes"; las de antes ya no. */
+function inicioDeAyer(): Date {
+  const hoy = new Date()
+  const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())
+  const ayer = new Date(inicioHoy)
+  ayer.setDate(ayer.getDate() - 1)
+  return ayer
+}
+
+/** Para el "Modo supervisión": junta dos cosas bien distintas en una sola
+ * consulta —
+ *  - las NOTAS de hoy y ayer (el avance reciente), y
+ *  - las OBSERVACIONES que todavía no se atienden, sin importar cuándo se
+ *    crearon (siguen siendo pendientes hasta que alguien las resuelva).
+ * Si se pasa `obraId` se limita a esa obra; si no, junta las de todas las
+ * obras a las que se tiene acceso (RLS se encarga de filtrar eso solo). */
+export async function listarEntradasSupervision(obraId?: string): Promise<EntradaConObra[]> {
+  const desde = inicioDeAyer().toISOString()
+  let query = supabase
     .from('entradas')
     .select(`${COLUMNAS}, obras(nombre, color, imagen_url)`)
+    .or(`and(tipo.eq.nota,fecha.gte.${desde}),and(tipo.eq.observacion,estado.in.(por_atender,en_proceso))`)
     .order('fecha', { ascending: false })
-    .limit(limite)
+  if (obraId) query = query.eq('obra_id', obraId)
+
+  const { data, error } = await query
   if (error) throw error
   return ((data ?? []) as unknown as EntradaFilaConObra[]).map((fila) => ({
     ...mapEntrada(fila),
