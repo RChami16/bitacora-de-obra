@@ -394,28 +394,42 @@ export async function generarPdfReporte({
   }
 
   /** Arma el estado de un listado de entradas en dos columnas (para no
-   * dejar tanto espacio en blanco cuando una entrada es corta): se llena la
-   * columna izquierda de arriba hacia abajo, luego la derecha, y solo hasta
-   * que ninguna de las dos tiene espacio se pasa a una hoja nueva. */
+   * dejar tanto espacio en blanco cuando una entrada es corta). Las
+   * entradas ALTERNAN de columna en orden (1ª izquierda, 2ª derecha, 3ª
+   * izquierda…) en vez de llenar toda la izquierda antes de empezar la
+   * derecha — así el orden cronológico coincide con el orden de lectura
+   * normal (izquierda a derecha, de arriba hacia abajo), en vez de tener
+   * que leer toda una columna y saltar hasta arriba de la otra. */
   function crearColumnas() {
     const COL_GAP = 24
     const colW = (contentW - COL_GAP) / 2
     const colX: [number, number] = [margin, margin + colW + COL_GAP]
-    let columna: 0 | 1 = 0
-    let yColStart = y
+    const yCols: [number, number] = [y, y]
+
     function salto(alturaNecesaria: number) {
-      if (y + alturaNecesaria <= pageH - margin) return
-      if (columna === 0) {
-        columna = 1
-        y = yColStart
-      } else {
+      if (y + alturaNecesaria > pageH - margin) {
         doc.addPage()
-        columna = 0
+        yCols[0] = margin
+        yCols[1] = margin
         y = margin
-        yColStart = margin
       }
     }
-    return { colW, salto, obtenerX: () => colX[columna] }
+
+    /** Ubica la entrada número `indice` (0, 1, 2…) en su columna
+     * correspondiente. Hay que llamar a `guardar()` justo después de
+     * dibujarla, para recordar dónde quedó esa columna. */
+    function columnaPara(indice: number) {
+      const columna = (indice % 2) as 0 | 1
+      y = yCols[columna]
+      return {
+        x: colX[columna],
+        guardar: () => {
+          yCols[columna] = y
+        },
+      }
+    }
+
+    return { colW, salto, columnaPara }
   }
 
   saltoDePaginaSiHaceFalta(20)
@@ -434,9 +448,12 @@ export async function generarPdfReporte({
     doc.text('No hubo entradas registradas en este periodo.', margin, y)
     y += 20
   } else {
-    const { colW, salto, obtenerX } = crearColumnas()
-    for (const entrada of entradas) {
-      await escribirBloqueEntrada(formatFechaLarga(entrada.fecha), entrada.texto, entrada.fotos, obtenerX, colW, 1, salto)
+    const { colW, salto, columnaPara } = crearColumnas()
+    for (let idx = 0; idx < entradas.length; idx++) {
+      const entrada = entradas[idx]
+      const { x, guardar } = columnaPara(idx)
+      await escribirBloqueEntrada(formatFechaLarga(entrada.fecha), entrada.texto, entrada.fotos, () => x, colW, 1, salto)
+      guardar()
     }
   }
 
@@ -454,10 +471,13 @@ export async function generarPdfReporte({
     doc.text('Observaciones pendientes', margin, y)
     y += 26
 
-    const { colW, salto, obtenerX } = crearColumnas()
-    for (const obs of observacionesSinAtender) {
+    const { colW, salto, columnaPara } = crearColumnas()
+    for (let idx = 0; idx < observacionesSinAtender.length; idx++) {
+      const obs = observacionesSinAtender[idx]
       const etiqueta = ETIQUETA_ESTADO_OBSERVACION[obs.estado] ?? obs.estado
-      await escribirBloqueEntrada(`${formatFechaLarga(obs.fecha)} — ${etiqueta}`, obs.texto, obs.fotos, obtenerX, colW, 1, salto)
+      const { x, guardar } = columnaPara(idx)
+      await escribirBloqueEntrada(`${formatFechaLarga(obs.fecha)} — ${etiqueta}`, obs.texto, obs.fotos, () => x, colW, 1, salto)
+      guardar()
     }
   }
 

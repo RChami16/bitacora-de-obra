@@ -57,6 +57,38 @@ export async function listarEntradas(obraId: string, tipo: TipoEntrada): Promise
   return (data ?? []).map(mapEntrada)
 }
 
+/** Una entrada con los datos de su obra ya incluidos — para el "Modo
+ * supervisión", que junta lo más reciente de TODAS las obras a las que se
+ * tiene acceso en un solo lugar. */
+export interface EntradaConObra extends EntradaRemota {
+  obraNombre: string
+  obraColor: string
+  obraImagenUrl: string | null
+}
+
+interface EntradaFilaConObra extends EntradaFila {
+  obras: { nombre: string; color: string; imagen_url: string | null } | null
+}
+
+/** Las N notas/observaciones más recientes de TODAS las obras del usuario
+ * (propias o compartidas), sin importar de cuál sean — RLS ya se encarga de
+ * que solo salgan las de obras a las que tiene acceso, así que no hay que
+ * pedir la lista de obras aparte ni hacer N consultas. */
+export async function listarEntradasRecientes(limite = 40): Promise<EntradaConObra[]> {
+  const { data, error } = await supabase
+    .from('entradas')
+    .select(`${COLUMNAS}, obras(nombre, color, imagen_url)`)
+    .order('fecha', { ascending: false })
+    .limit(limite)
+  if (error) throw error
+  return ((data ?? []) as unknown as EntradaFilaConObra[]).map((fila) => ({
+    ...mapEntrada(fila),
+    obraNombre: fila.obras?.nombre ?? 'Obra',
+    obraColor: fila.obras?.color ?? '#e67e22',
+    obraImagenUrl: fila.obras?.imagen_url ?? null,
+  }))
+}
+
 async function subirFotoEntrada(obraId: string, entradaId: string, blob: Blob, indice: number): Promise<string> {
   const extension = blob.type.includes('png') ? 'png' : 'jpg'
   const ruta = `${obraId}/${entradaId}-${indice}.${extension}`

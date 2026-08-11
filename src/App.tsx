@@ -14,12 +14,14 @@ import { listarObras, crearObra, actualizarObra, eliminarObra, type Obra } from 
 import { listarMiembros, invitarMiembro, quitarMiembro, type Miembro } from './miembrosApi'
 import {
   listarEntradas,
+  listarEntradasRecientes,
   crearEntrada,
   subirFotosDeEntrada,
   actualizarEstadoObservacion,
   eliminarEntrada,
   descargarFotoEntrada,
   type EntradaRemota,
+  type EntradaConObra,
 } from './entradasApi'
 import { listarNombresSemana, renombrarSemana } from './semanasApi'
 import { AuthScreen } from './AuthScreen'
@@ -37,6 +39,7 @@ import {
   IconCerrar,
   IconEdificio,
   IconDiario,
+  IconOjo,
   IconCarpeta,
   IconFlechaIzquierda,
   IconFlechaDerecha,
@@ -496,6 +499,7 @@ function HomeScreen({
   onCambiaronObras: () => void
 }) {
   const [formulario, setFormulario] = useState<'nueva' | string | null>(null)
+  const [vistaHome, setVistaHome] = useState<'obras' | 'supervision'>('obras')
 
   if (formulario !== null) {
     const editando = typeof formulario === 'string' ? obras?.find((o) => o.id === formulario) : undefined
@@ -521,29 +525,108 @@ function HomeScreen({
 
   return (
     <main className="app-main">
-      <h2>Mis obras</h2>
-      {cargando && <p className="empty-state">Cargando tus obras…</p>}
-      <div className="obra-grid">
-        {obras?.map((o) => (
-          <ObraCard
-            key={o.id}
-            obra={o}
-            esDueno={o.creadoPor === userId}
-            onEntrar={() => onEntrarObra(o.id)}
-            onEditar={() => setFormulario(o.id)}
-          />
-        ))}
-        <button type="button" className="obra-card-nueva" onClick={() => setFormulario('nueva')}>
-          <span className="obra-icono obra-icono--nueva">
-            <IconMas size={22} />
-          </span>
-          <span className="obra-card-nombre">Nueva obra</span>
+      <div className="tabs">
+        <button
+          type="button"
+          className={`tab ${vistaHome === 'obras' ? 'tab-activa' : ''}`}
+          onClick={() => setVistaHome('obras')}
+        >
+          Mis obras
+        </button>
+        <button
+          type="button"
+          className={`tab ${vistaHome === 'supervision' ? 'tab-activa' : ''}`}
+          onClick={() => setVistaHome('supervision')}
+        >
+          <IconOjo size={15} />
+          Supervisión
         </button>
       </div>
-      {!cargando && obras && obras.length === 0 && (
-        <p className="empty-state">Crea tu primera obra para empezar a registrar evidencia, o pídele al dueño de una obra que te agregue como colaborador.</p>
+
+      {vistaHome === 'supervision' ? (
+        <ModoSupervision onEntrarObra={onEntrarObra} />
+      ) : (
+        <>
+          {cargando && <p className="empty-state">Cargando tus obras…</p>}
+          <div className="obra-grid">
+            {obras?.map((o) => (
+              <ObraCard
+                key={o.id}
+                obra={o}
+                esDueno={o.creadoPor === userId}
+                onEntrar={() => onEntrarObra(o.id)}
+                onEditar={() => setFormulario(o.id)}
+              />
+            ))}
+            <button type="button" className="obra-card-nueva" onClick={() => setFormulario('nueva')}>
+              <span className="obra-icono obra-icono--nueva">
+                <IconMas size={22} />
+              </span>
+              <span className="obra-card-nombre">Nueva obra</span>
+            </button>
+          </div>
+          {!cargando && obras && obras.length === 0 && (
+            <p className="empty-state">Crea tu primera obra para empezar a registrar evidencia, o pídele al dueño de una obra que te agregue como colaborador.</p>
+          )}
+        </>
       )}
     </main>
+  )
+}
+
+/** "Modo supervisión": las notas/observaciones más recientes de TODAS las
+ * obras a las que se tiene acceso, juntas en un solo lugar — para no tener
+ * que entrar obra por obra a buscar qué se hizo hoy en cada una. Tocar una
+ * tarjeta entra directo a esa obra. */
+function ModoSupervision({ onEntrarObra }: { onEntrarObra: (id: string) => void }) {
+  const [entradas, setEntradas] = useState<EntradaConObra[] | null>(null)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    setCargando(true)
+    setError(false)
+    listarEntradasRecientes(40)
+      .then(setEntradas)
+      .catch((err) => {
+        console.error('No se pudieron cargar las últimas entradas de tus obras:', err)
+        setError(true)
+      })
+      .finally(() => setCargando(false))
+  }, [])
+
+  if (cargando) return <p className="empty-state">Cargando la actividad de tus obras…</p>
+  if (error) return <p className="empty-state">No se pudo cargar. Revisa tu conexión e intenta de nuevo.</p>
+  if (!entradas || entradas.length === 0) {
+    return <p className="empty-state">Todavía no hay notas ni observaciones en tus obras.</p>
+  }
+
+  return (
+    <div className="entry-list">
+      {entradas.map((e) => (
+        <button key={e.id} type="button" className="supervision-card" onClick={() => onEntrarObra(e.obraId)}>
+          {e.fotos[0] ? (
+            <EntradaThumbRemota ruta={e.fotos[0]} extra={e.fotos.length - 1} />
+          ) : (
+            <ObraIcono nombre={e.obraNombre} color={e.obraColor} imagenSrc={e.obraImagenUrl} tamano={56} />
+          )}
+          <div className="entry-body">
+            <div className="supervision-card-obra">{e.obraNombre}</div>
+            <div className="entry-date">{formatFecha(e.fecha)}</div>
+            {e.texto && <div className="entry-note">{e.texto}</div>}
+            {e.tipo === 'observacion' && e.estado && (
+              <span className={`estado-badge estado-${e.estado}`}>{etiquetaEstado(e.estado)}</span>
+            )}
+            {e.autorEmail && (
+              <div className="entry-autor">
+                <IconUsuario size={12} />
+                {e.autorEmail}
+              </div>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
   )
 }
 

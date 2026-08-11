@@ -485,6 +485,29 @@ button.secondary.small {
   box-shadow: var(--shadow);
 }
 
+/* --- Modo supervisión: tarjeta de una entrada de cualquier obra --- */
+.supervision-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: var(--shadow);
+  text-align: left;
+  color: var(--text);
+  width: 100%;
+}
+
+.supervision-card-obra {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 /* --- Estatus de subida: iconito chico en la esquina, no un texto largo --- */
 .entry-sync-badge {
   position: absolute;

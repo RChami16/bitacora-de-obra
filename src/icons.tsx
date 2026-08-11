@@ -107,6 +107,15 @@ export function IconDiario({ size = 22, className }: IconProps) {
   )
 }
 
+export function IconOjo({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" className={className} {...base}>
+      <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6z" strokeLinejoin="round" />
+      <circle cx="10" cy="10" r="2.3" />
+    </svg>
+  )
+}
+
 export function IconCarpeta({ size = 20, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" className={className} {...base}>
