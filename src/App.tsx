@@ -1279,6 +1279,7 @@ function ReportePreview({
   obraNombre,
   periodoLabel,
   resumenInicial,
+  notaIA,
   entradasIniciales,
   observacionesAbiertas,
   onCancelar,
@@ -1287,6 +1288,9 @@ function ReportePreview({
   obraNombre: string
   periodoLabel: string
   resumenInicial: string
+  /** Aviso de la IA (huecos, contradicciones entre entradas…) solo para
+   * quien arma el reporte — nunca se manda al PDF. */
+  notaIA: string | null
   entradasIniciales: EntradaBorrador[]
   observacionesAbiertas: ObservacionBorrador[]
   onCancelar: () => void
@@ -1346,6 +1350,16 @@ function ReportePreview({
           placeholder="Escribe o ajusta el resumen del periodo…"
         />
       </div>
+
+      {notaIA && (
+        <div className="nota-ia">
+          <IconAdvertencia size={15} />
+          <div>
+            <strong>Solo para ti — esto no va en el PDF:</strong>
+            <p>{notaIA}</p>
+          </div>
+        </div>
+      )}
 
       <div className="reporte-preview-entradas">
         {entradas.length === 0 && (
@@ -1495,6 +1509,15 @@ function ultimasSemanas(): OpcionPeriodo[] {
     fin.setDate(fin.getDate() + 6)
     return { referencia, etiqueta: `${formatCorto(inicio)} – ${formatCorto(fin)}` }
   })
+}
+
+/** Separa la "Nota: ..." que a veces agrega la IA al final del resumen
+ * (huecos, contradicciones entre entradas, etc.) — es un aviso para quien
+ * arma el reporte, no texto que deba salir impreso en el PDF. */
+function separarNotaDeIA(texto: string): { resumen: string; nota: string | null } {
+  const idx = texto.indexOf('Nota:')
+  if (idx === -1) return { resumen: texto, nota: null }
+  return { resumen: texto.slice(0, idx).trim(), nota: texto.slice(idx).trim() }
 }
 
 /** Los últimos 3 meses (el actual y los 2 anteriores), como "Agosto 2026". */
@@ -1725,6 +1748,10 @@ function AppAutenticada({ session }: { session: Session }) {
   const [reportePendiente, setReportePendiente] = useState<{
     periodoLabel: string
     resumen: string
+    /** La "Nota:" que a veces agrega la IA al final (huecos, contradicciones
+     * entre entradas, etc.) — es un aviso para quien arma el reporte, NO
+     * texto para el PDF, así que se muestra aparte y nunca se manda ahí. */
+    notaIA: string | null
     entradas: EntradaBorrador[]
     observaciones: ObservacionBorrador[]
   } | null>(null)
@@ -1879,9 +1906,15 @@ function AppAutenticada({ session }: { session: Session }) {
           )
         : null
 
+      // La IA a veces agrega al final una oración de "Nota: ..." avisando
+      // de huecos o contradicciones entre entradas — es para quien arma el
+      // reporte, no para que salga impreso en el PDF, así que se separa.
+      const { resumen, nota } = separarNotaDeIA(resumenIA ?? '')
+
       setReportePendiente({
         periodoLabel: label,
-        resumen: resumenIA ?? '',
+        resumen,
+        notaIA: nota,
         entradas: entradasBorrador,
         observaciones: observacionesBorrador,
       })
@@ -1937,31 +1970,7 @@ function AppAutenticada({ session }: { session: Session }) {
       })
 
       const nombreObraArchivo = obraActiva.nombre.trim().toLowerCase().replace(/\s+/g, '-')
-      const nombreArchivo = `bitacora-${nombreObraArchivo}.pdf`
-      const archivo = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' })
-
-      // En el celular, "compartir" abre el mismo cuadro nativo que usa
-      // WhatsApp/correo/etc. — mucho más directo que descargar y luego
-      // tener que buscar el archivo para reenviarlo. Si el navegador no lo
-      // soporta (la mayoría de escritorio), se descarga como antes.
-      if (navigator.canShare?.({ files: [archivo] })) {
-        try {
-          await navigator.share({
-            files: [archivo],
-            title: `Bitácora de obra — ${obraActiva.nombre}`,
-            text: `Reporte de ${obraActiva.nombre} (${reportePendiente?.periodoLabel ?? ''})`,
-          })
-        } catch (err) {
-          // AbortError = el usuario cerró el cuadro de compartir sin elegir
-          // nada; no es un error, no hace falta descargar en su lugar.
-          if (err instanceof Error && err.name !== 'AbortError') {
-            console.warn('No se pudo compartir, se descarga en su lugar:', err)
-            descargarBlob(pdfBlob, nombreArchivo)
-          }
-        }
-      } else {
-        descargarBlob(pdfBlob, nombreArchivo)
-      }
+      descargarBlob(pdfBlob, `bitacora-${nombreObraArchivo}.pdf`)
       setReportePendiente(null)
     } catch (err) {
       console.error(err)
@@ -2028,6 +2037,7 @@ function AppAutenticada({ session }: { session: Session }) {
               obraNombre={obraActiva?.nombre ?? ''}
               periodoLabel={reportePendiente.periodoLabel}
               resumenInicial={reportePendiente.resumen}
+              notaIA={reportePendiente.notaIA}
               entradasIniciales={reportePendiente.entradas}
               observacionesAbiertas={reportePendiente.observaciones}
               onCancelar={() => setReportePendiente(null)}
@@ -2060,23 +2070,18 @@ function AppAutenticada({ session }: { session: Session }) {
                   </button>
 
                   {pestana === 'nota' &&
-                    (pidiendoPeriodo === null ? (
+                    (generandoReporte !== null ? (
+                      <div className="periodo-cargando">
+                        <span className="spinner" />
+                        Preparando el reporte…
+                      </div>
+                    ) : pidiendoPeriodo === null ? (
                       <div className="reportes-bar">
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={generandoReporte !== null}
-                          onClick={() => setPidiendoPeriodo('semana')}
-                        >
+                        <button type="button" className="secondary" onClick={() => setPidiendoPeriodo('semana')}>
                           <IconDocumento size={15} />
                           Reporte semanal
                         </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={generandoReporte !== null}
-                          onClick={() => setPidiendoPeriodo('mes')}
-                        >
+                        <button type="button" className="secondary" onClick={() => setPidiendoPeriodo('mes')}>
                           <IconDocumento size={15} />
                           Reporte mensual
                         </button>
@@ -2091,11 +2096,7 @@ function AppAutenticada({ session }: { session: Session }) {
                             key={i}
                             type="button"
                             className="periodo-opcion"
-                            disabled={generandoReporte !== null}
-                            onClick={async () => {
-                              await prepararReporte(pidiendoPeriodo, op.referencia)
-                              setPidiendoPeriodo(null)
-                            }}
+                            onClick={() => prepararReporte(pidiendoPeriodo, op.referencia)}
                           >
                             <IconDocumento size={15} />
                             <span>
