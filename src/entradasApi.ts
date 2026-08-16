@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { EstadoObservacion, TipoEntrada } from './db'
+import type { CategoriaTrabajo, EstadoObservacion, TipoEntrada } from './db'
 
 /** Una nota u observación tal como vive en Supabase, visible para todo el
  * equipo que tenga acceso a la obra (ver miembrosApi.ts). */
@@ -7,25 +7,32 @@ export interface EntradaRemota {
   id: string
   obraId: string
   tipo: TipoEntrada
+  /** Id de quien la creó — solo esa persona (o quien creó la obra) puede
+   * borrarla; cualquier miembro puede seguir cambiando el estatus de una
+   * observación, sea o no suya. */
+  autorId: string | null
   autorEmail: string | null
   fecha: string
   texto: string | null
   estado: EstadoObservacion | null
+  categoria: CategoriaTrabajo | null
   fotos: string[] // rutas dentro del bucket privado "entradas-fotos"
   creadoEn: string
   atendidoEn: string | null
 }
 
-const COLUMNAS = 'id, obra_id, tipo, autor_email, fecha, texto, estado, fotos, creado_en, atendido_en'
+const COLUMNAS = 'id, obra_id, tipo, autor, autor_email, fecha, texto, estado, categoria, fotos, creado_en, atendido_en'
 
 interface EntradaFila {
   id: string
   obra_id: string
   tipo: TipoEntrada
+  autor: string | null
   autor_email: string | null
   fecha: string
   texto: string | null
   estado: EstadoObservacion | null
+  categoria: CategoriaTrabajo | null
   fotos: string[] | null
   creado_en: string
   atendido_en: string | null
@@ -36,10 +43,12 @@ function mapEntrada(fila: EntradaFila): EntradaRemota {
     id: fila.id,
     obraId: fila.obra_id,
     tipo: fila.tipo,
+    autorId: fila.autor,
     autorEmail: fila.autor_email,
     fecha: fila.fecha,
     texto: fila.texto,
     estado: fila.estado,
+    categoria: fila.categoria,
     fotos: fila.fotos ?? [],
     creadoEn: fila.creado_en,
     atendidoEn: fila.atendido_en,
@@ -125,6 +134,9 @@ export interface DatosEntrada {
   fotos: Blob[]
   /** Solo aplica a observaciones; por defecto "por_atender". */
   estado?: EstadoObservacion
+  /** Tipo de trabajo (albañilería, herrería, instalaciones, acabados,
+   * otro); opcional. */
+  categoria?: CategoriaTrabajo
 }
 
 /** Crea el renglón sin fotos todavía. Separado de `crearEntrada` para poder
@@ -148,6 +160,7 @@ export async function crearEntradaBase(
       fecha: new Date(datos.fecha).toISOString(),
       texto: datos.texto?.trim() || null,
       estado: datos.tipo === 'observacion' ? (datos.estado ?? 'por_atender') : null,
+      categoria: datos.categoria ?? null,
     })
     .select(COLUMNAS)
     .single()

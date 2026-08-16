@@ -5,9 +5,11 @@ import {
   db,
   blobsAAlmacenar,
   almacenadasABlobs,
+  CATEGORIAS_TRABAJO,
   type EntradaCola,
   type EstadoObservacion,
   type TipoEntrada,
+  type CategoriaTrabajo,
 } from './db'
 import { supabase } from './supabase'
 import { listarObras, crearObra, actualizarObra, eliminarObra, type Obra } from './obrasApi'
@@ -55,6 +57,10 @@ const ESTADOS_OBSERVACION: { valor: EstadoObservacion; etiqueta: string }[] = [
 
 function etiquetaEstado(estado: EstadoObservacion): string {
   return ESTADOS_OBSERVACION.find((e) => e.valor === estado)?.etiqueta ?? estado
+}
+
+function etiquetaCategoria(categoria: CategoriaTrabajo): string {
+  return CATEGORIAS_TRABAJO.find((c) => c.valor === categoria)?.etiqueta ?? categoria
 }
 
 const PALETA_COLORES = [
@@ -763,6 +769,7 @@ function EntradaForm({
   const [fechaAuto, setFechaAuto] = useState<'detectada' | 'no-detectada' | null>(null)
   const [texto, setTexto] = useState('')
   const [estado, setEstado] = useState<EstadoObservacion>('por_atender')
+  const [categoria, setCategoria] = useState<CategoriaTrabajo | ''>('')
   const [fotos, setFotos] = useState<Blob[]>([])
   const [guardando, setGuardando] = useState(false)
 
@@ -806,6 +813,7 @@ function EntradaForm({
       texto: texto.trim() || undefined,
       fotos,
       estado: tipo === 'observacion' ? estado : undefined,
+      categoria: categoria || undefined,
     }
     // `idParcial` se llena en cuanto el renglón queda creado en Supabase,
     // aunque después falle la subida de fotos — así, si hay que reintentar,
@@ -912,6 +920,22 @@ function EntradaForm({
         </div>
       )}
 
+      <div className="field">
+        <label htmlFor="categoria-trabajo">Tipo de trabajo (opcional)</label>
+        <select
+          id="categoria-trabajo"
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value as CategoriaTrabajo | '')}
+        >
+          <option value="">Sin especificar</option>
+          {CATEGORIAS_TRABAJO.map((op) => (
+            <option key={op.valor} value={op.valor}>
+              {op.etiqueta}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="form-actions">
         <button type="button" className="secondary" onClick={onClose}>
           Cancelar
@@ -968,10 +992,12 @@ interface EntradaVista {
   remotaId?: string
   colaId?: number
   tipo: TipoEntrada
+  autorId: string | null
   autorEmail: string | null
   fecha: string
   texto: string | null
   estado: EstadoObservacion | null
+  categoria: CategoriaTrabajo | null
   fotos: string[]
   fotosLocales: Blob[]
   pendienteDeSubir: boolean
@@ -983,10 +1009,12 @@ function vistaDeRemota(e: EntradaRemota): EntradaVista {
     claveLocal: e.id,
     remotaId: e.id,
     tipo: e.tipo,
+    autorId: e.autorId,
     autorEmail: e.autorEmail,
     fecha: e.fecha,
     texto: e.texto,
     estado: e.estado,
+    categoria: e.categoria,
     fotos: e.fotos,
     fotosLocales: [],
     pendienteDeSubir: false,
@@ -998,10 +1026,14 @@ function vistaDeCola(e: EntradaCola & { id: number }): EntradaVista {
     claveLocal: `cola-${e.id}`,
     colaId: e.id,
     tipo: e.tipo,
+    // Todavía no tiene id de Supabase, pero es de este dispositivo/usuario
+    // — se resuelve al mostrar el botón de borrar, no aquí.
+    autorId: null,
     autorEmail: null,
     fecha: e.fecha,
     texto: e.texto ?? null,
     estado: e.estado ?? null,
+    categoria: e.categoria ?? null,
     fotos: [],
     fotosLocales: almacenadasABlobs(e.fotos),
     pendienteDeSubir: true,
@@ -1074,6 +1106,7 @@ function useEntradasObra(obraId: string | null, tipo: TipoEntrada, online: boole
               texto: item.texto,
               fotos,
               estado: item.estado,
+              categoria: item.categoria,
             },
             async (id) => {
               await db.entradasCola.update(item.id!, { remotaIdParcial: id })
@@ -1130,11 +1163,16 @@ function useEntradasObra(obraId: string | null, tipo: TipoEntrada, online: boole
 
 function EntradaCard({
   entrada,
+  puedeBorrar = true,
   onBorrar,
   onCambiarEstado,
   onReintentar,
 }: {
   entrada: EntradaVista
+  /** Solo quien la creó (o quien creó la obra) puede borrarla — cualquier
+   * miembro sigue pudiendo cambiar el estatus de una observación, eso no
+   * cambia. */
+  puedeBorrar?: boolean
   onBorrar: () => void
   onCambiarEstado?: (estado: EstadoObservacion) => void
   onReintentar?: () => void
@@ -1162,6 +1200,7 @@ function EntradaCard({
       )}
       <div className="entry-body">
         <div className="entry-date">{formatFecha(entrada.fecha)}</div>
+        {entrada.categoria && <span className="categoria-badge">{etiquetaCategoria(entrada.categoria)}</span>}
         {entrada.texto && <div className="entry-note">{entrada.texto}</div>}
         {entrada.autorEmail && (
           <div className="entry-autor">
@@ -1208,9 +1247,11 @@ function EntradaCard({
           {entrada.pendienteDeSubir ? <IconSubiendo size={15} /> : '✓✓'}
         </span>
       )}
-      <button type="button" className="entry-borrar" onClick={borrar} aria-label="Borrar entrada">
-        <IconEliminar size={15} />
-      </button>
+      {puedeBorrar && (
+        <button type="button" className="entry-borrar" onClick={borrar} aria-label="Borrar entrada">
+          <IconEliminar size={15} />
+        </button>
+      )}
     </div>
   )
 }
@@ -1414,22 +1455,42 @@ function inicioDeSemanaDe(fecha: Date): Date {
 }
 
 /** Calcula el rango [inicio, fin) y la etiqueta legible de la semana o mes
- * actual, en la zona horaria local del dispositivo. */
-function calcularPeriodo(periodo: 'semana' | 'mes'): { inicio: Date; fin: Date; label: string } {
-  const ahora = new Date()
+ * que contiene a `referencia` (por defecto, hoy), en hora local. */
+function calcularPeriodo(
+  periodo: 'semana' | 'mes',
+  referencia: Date = new Date(),
+): { inicio: Date; fin: Date; label: string } {
   if (periodo === 'semana') {
-    const inicio = inicioDeSemanaDe(ahora)
+    const inicio = inicioDeSemanaDe(referencia)
     const fin = new Date(inicio)
     fin.setDate(fin.getDate() + 7)
     const finInclusive = new Date(fin.getTime() - 1)
     const label = `Semana del ${inicio.toLocaleDateString('es', { day: '2-digit', month: 'long' })} al ${finInclusive.toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })}`
     return { inicio, fin, label }
   }
-  const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
-  const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1)
+  const inicio = new Date(referencia.getFullYear(), referencia.getMonth(), 1)
+  const fin = new Date(referencia.getFullYear(), referencia.getMonth() + 1, 1)
   const mesTexto = inicio.toLocaleDateString('es', { month: 'long', year: 'numeric' })
   const label = mesTexto.charAt(0).toUpperCase() + mesTexto.slice(1)
   return { inicio, fin, label }
+}
+
+/** Convierte el valor de un `<input type="date">` ("YYYY-MM-DD") a un Date
+ * en hora LOCAL — `new Date("YYYY-MM-DD")` lo interpreta como medianoche
+ * UTC, lo que corre la fecha un día para casi cualquiera fuera de UTC. */
+function parsearFechaInputLocal(valor: string): Date {
+  const [y, m, d] = valor.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
+/** Hoy, en formato "YYYY-MM-DD" y hora local — para el valor inicial del
+ * selector de semana/mes a reportar. */
+function fechaInputHoy(): string {
+  const hoy = new Date()
+  const yyyy = hoy.getFullYear()
+  const mm = String(hoy.getMonth() + 1).padStart(2, '0')
+  const dd = String(hoy.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
 /** Clave estable de la semana a la que pertenece una fecha: "YYYY-MM-DD"
@@ -1487,6 +1548,7 @@ function ListaPorSemanas({
   lista,
   semanaInicial,
   onSemanaInicialConsumida,
+  puedeBorrar,
   onBorrar,
   onCambiarEstado,
   onReintentar,
@@ -1500,6 +1562,7 @@ function ListaPorSemanas({
    * vez si luego se cambia de pestaña o se navega dentro de la obra. */
   semanaInicial?: string | null
   onSemanaInicialConsumida?: () => void
+  puedeBorrar: (entrada: EntradaVista) => boolean
   onBorrar: (entrada: EntradaVista) => void
   onCambiarEstado?: (entrada: EntradaVista, estado: EstadoObservacion) => void
   onReintentar: () => void
@@ -1578,6 +1641,7 @@ function ListaPorSemanas({
           <EntradaCard
             key={e.claveLocal}
             entrada={e}
+            puedeBorrar={puedeBorrar(e)}
             onBorrar={() => onBorrar(e)}
             onCambiarEstado={onCambiarEstado ? (estado) => onCambiarEstado(e, estado) : undefined}
             onReintentar={onReintentar}
@@ -1642,6 +1706,7 @@ function AppAutenticada({ session }: { session: Session }) {
   const [saltoSemana, setSaltoSemana] = useState<string | null>(null)
   const [origenSupervision, setOrigenSupervision] = useState(false)
   const [formAbierto, setFormAbierto] = useState(false)
+  const [fechaReporte, setFechaReporte] = useState(fechaInputHoy)
   const [generandoReporte, setGenerandoReporte] = useState<'semana' | 'mes' | null>(null)
   const [reportePendiente, setReportePendiente] = useState<{
     periodoLabel: string
@@ -1743,6 +1808,17 @@ function AppAutenticada({ session }: { session: Session }) {
     }
   }
 
+  /** Solo quien creó la entrada, o quien creó la obra, puede borrarla — el
+   * servidor ya lo exige así (RLS), esto es solo para no mostrar el botón
+   * cuando de todas formas fallaría. Cambiar el estatus de una observación
+   * lo sigue pudiendo hacer cualquier miembro, eso no cambió. */
+  function puedeBorrarEntrada(entrada: EntradaVista): boolean {
+    if (entrada.pendienteDeSubir) return true
+    if (entrada.autorId && entrada.autorId === session.user.id) return true
+    if (obraActiva?.creadoPor === session.user.id) return true
+    return false
+  }
+
   async function cambiarEstadoObservacion(entrada: EntradaVista, estado: EstadoObservacion) {
     if (entrada.colaId !== undefined) {
       await db.entradasCola.update(entrada.colaId, { estado })
@@ -1757,11 +1833,11 @@ function AppAutenticada({ session }: { session: Session }) {
   /** Junta las entradas del periodo, las observaciones todavía abiertas y
    * pide el resumen de IA — arma el borrador que se muestra en la vista
    * previa editable, sin generar el PDF todavía. */
-  async function prepararReporte(periodo: 'semana' | 'mes') {
+  async function prepararReporte(periodo: 'semana' | 'mes', referencia: Date) {
     if (!obraActiva || obraActivaId === null) return
     setGenerandoReporte(periodo)
     try {
-      const { inicio, fin, label } = calcularPeriodo(periodo)
+      const { inicio, fin, label } = calcularPeriodo(periodo, referencia)
 
       // Nota: las notas de voz se dictan directo con el micrófono del
       // teclado del celular sobre el campo de texto, así que el texto ya
@@ -1841,7 +1917,31 @@ function AppAutenticada({ session }: { session: Session }) {
       })
 
       const nombreObraArchivo = obraActiva.nombre.trim().toLowerCase().replace(/\s+/g, '-')
-      descargarBlob(pdfBlob, `bitacora-${nombreObraArchivo}.pdf`)
+      const nombreArchivo = `bitacora-${nombreObraArchivo}.pdf`
+      const archivo = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' })
+
+      // En el celular, "compartir" abre el mismo cuadro nativo que usa
+      // WhatsApp/correo/etc. — mucho más directo que descargar y luego
+      // tener que buscar el archivo para reenviarlo. Si el navegador no lo
+      // soporta (la mayoría de escritorio), se descarga como antes.
+      if (navigator.canShare?.({ files: [archivo] })) {
+        try {
+          await navigator.share({
+            files: [archivo],
+            title: `Bitácora de obra — ${obraActiva.nombre}`,
+            text: `Reporte de ${obraActiva.nombre} (${reportePendiente?.periodoLabel ?? ''})`,
+          })
+        } catch (err) {
+          // AbortError = el usuario cerró el cuadro de compartir sin elegir
+          // nada; no es un error, no hace falta descargar en su lugar.
+          if (err instanceof Error && err.name !== 'AbortError') {
+            console.warn('No se pudo compartir, se descarga en su lugar:', err)
+            descargarBlob(pdfBlob, nombreArchivo)
+          }
+        }
+      } else {
+        descargarBlob(pdfBlob, nombreArchivo)
+      }
       setReportePendiente(null)
     } catch (err) {
       console.error(err)
@@ -1940,25 +2040,37 @@ function AppAutenticada({ session }: { session: Session }) {
                   </button>
 
                   {pestana === 'nota' && (
-                    <div className="reportes-bar">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={generandoReporte !== null}
-                        onClick={() => prepararReporte('semana')}
-                      >
-                        <IconDocumento size={15} />
-                        {generandoReporte === 'semana' ? 'Preparando…' : 'Reporte semanal'}
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={generandoReporte !== null}
-                        onClick={() => prepararReporte('mes')}
-                      >
-                        <IconDocumento size={15} />
-                        {generandoReporte === 'mes' ? 'Preparando…' : 'Reporte mensual'}
-                      </button>
+                    <div className="reportes">
+                      <div className="field">
+                        <label htmlFor="reporte-fecha-ref">Semana o mes a reportar</label>
+                        <input
+                          id="reporte-fecha-ref"
+                          type="date"
+                          value={fechaReporte}
+                          onChange={(e) => setFechaReporte(e.target.value)}
+                        />
+                        <p className="field-hint">Elige cualquier día de la semana o el mes que quieres reportar.</p>
+                      </div>
+                      <div className="reportes-bar">
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoReporte !== null}
+                          onClick={() => prepararReporte('semana', parsearFechaInputLocal(fechaReporte))}
+                        >
+                          <IconDocumento size={15} />
+                          {generandoReporte === 'semana' ? 'Preparando…' : 'Reporte semanal'}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoReporte !== null}
+                          onClick={() => prepararReporte('mes', parsearFechaInputLocal(fechaReporte))}
+                        >
+                          <IconDocumento size={15} />
+                          {generandoReporte === 'mes' ? 'Preparando…' : 'Reporte mensual'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </>
@@ -1979,6 +2091,7 @@ function AppAutenticada({ session }: { session: Session }) {
                 lista={listaActiva}
                 semanaInicial={saltoSemana}
                 onSemanaInicialConsumida={() => setSaltoSemana(null)}
+                puedeBorrar={puedeBorrarEntrada}
                 onBorrar={borrarEntrada}
                 onCambiarEstado={pestana === 'observacion' ? cambiarEstadoObservacion : undefined}
                 onReintentar={() => listaActiva.reintentarAhora()}

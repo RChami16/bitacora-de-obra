@@ -18,6 +18,15 @@ import Dexie, { type Table } from 'dexie'
 
 export type TipoEntrada = 'nota' | 'observacion'
 export type EstadoObservacion = 'por_atender' | 'en_proceso' | 'atendido'
+export type CategoriaTrabajo = 'albanileria' | 'herreria' | 'instalaciones' | 'acabados' | 'otro'
+
+export const CATEGORIAS_TRABAJO: { valor: CategoriaTrabajo; etiqueta: string }[] = [
+  { valor: 'albanileria', etiqueta: 'Albañilería' },
+  { valor: 'herreria', etiqueta: 'Herrería' },
+  { valor: 'instalaciones', etiqueta: 'Instalaciones' },
+  { valor: 'acabados', etiqueta: 'Acabados' },
+  { valor: 'otro', etiqueta: 'Otro' },
+]
 
 /** Una foto guardada como ArrayBuffer en vez de Blob. Varios navegadores
  * (sobre todo Safari/iOS) tienen bugs conocidos donde un Blob guardado en
@@ -54,6 +63,9 @@ export interface EntradaCola {
   fotos: FotoAlmacenada[]
   /** Solo aplica a observaciones. */
   estado?: EstadoObservacion
+  /** Tipo de trabajo (albañilería, herrería, instalaciones, acabados,
+   * otro); opcional. */
+  categoria?: CategoriaTrabajo
   creadoEn: string
   /** Mensaje del último intento fallido de subida que NO fue por falta de
    * señal (p.ej. un permiso mal configurado) — si sigue sin señal simplemente
@@ -72,10 +84,12 @@ export interface EntradaCache {
   id: string // uuid de Supabase
   obraId: string
   tipo: TipoEntrada
+  autorId: string | null
   autorEmail: string | null
   fecha: string
   texto: string | null
   estado: EstadoObservacion | null
+  categoria: CategoriaTrabajo | null
   fotos: string[] // rutas dentro del bucket entradas-fotos
   creadoEn: string
   atendidoEn: string | null

@@ -247,3 +247,20 @@ create policy "semanas_nombre_insert" on public.semanas_nombre
 drop policy if exists "semanas_nombre_update" on public.semanas_nombre;
 create policy "semanas_nombre_update" on public.semanas_nombre
   for update using (public.es_miembro_obra(obra_id));
+
+-- ============================================================
+-- PARTE 6 — Tipo de trabajo por entrada, y permisos de borrado más finos:
+-- cualquiera puede seguir cambiando el estatus de una observación (no
+-- cambia nada ahí), pero borrar una nota/observación ahora solo lo puede
+-- hacer quien la creó, o quien creó la obra.
+-- ============================================================
+alter table public.entradas add column if not exists categoria text
+  check (categoria in ('albanileria', 'herreria', 'instalaciones', 'acabados', 'otro'));
+
+drop policy if exists "entradas_delete_miembros" on public.entradas;
+drop policy if exists "entradas_delete_propias_o_dueno" on public.entradas;
+create policy "entradas_delete_propias_o_dueno" on public.entradas
+  for delete using (
+    autor = auth.uid()
+    or exists (select 1 from public.obras o where o.id = obra_id and o.creado_por = auth.uid())
+  );

@@ -331,6 +331,12 @@ button.secondary.small {
   box-shadow: var(--shadow);
 }
 
+.reportes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .reportes-bar {
   display: flex;
   gap: 10px;
@@ -707,6 +713,18 @@ button.secondary.small {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+.categoria-badge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+  margin-top: 2px;
 }
 
 /* --- Estatus de una observación: selector con color según el estado --- */
