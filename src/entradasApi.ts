@@ -91,17 +91,19 @@ function inicioDeAyer(): Date {
 
 /** Para el "Modo supervisión": junta dos cosas bien distintas en una sola
  * consulta —
- *  - las NOTAS de hoy y ayer (el avance reciente), y
+ *  - las NOTAS desde `desde` (el avance reciente; por defecto, desde ayer),
+ *    y
  *  - las OBSERVACIONES que todavía no se atienden, sin importar cuándo se
- *    crearon (siguen siendo pendientes hasta que alguien las resuelva).
+ *    crearon (siguen siendo pendientes hasta que alguien las resuelva —
+ *    esas no se limitan por fecha, aunque se cambie el rango de días).
  * Si se pasa `obraId` se limita a esa obra; si no, junta las de todas las
  * obras a las que se tiene acceso (RLS se encarga de filtrar eso solo). */
-export async function listarEntradasSupervision(obraId?: string): Promise<EntradaConObra[]> {
-  const desde = inicioDeAyer().toISOString()
+export async function listarEntradasSupervision(obraId?: string, desde?: Date): Promise<EntradaConObra[]> {
+  const desdeIso = (desde ?? inicioDeAyer()).toISOString()
   let query = supabase
     .from('entradas')
     .select(`${COLUMNAS}, obras(nombre, color, imagen_url)`)
-    .or(`and(tipo.eq.nota,fecha.gte.${desde}),and(tipo.eq.observacion,estado.in.(por_atender,en_proceso))`)
+    .or(`and(tipo.eq.nota,fecha.gte.${desdeIso}),and(tipo.eq.observacion,estado.in.(por_atender,en_proceso))`)
     .order('fecha', { ascending: false })
   if (obraId) query = query.eq('obra_id', obraId)
 

@@ -615,6 +615,7 @@ function ModoSupervision({
   onEntrarEntrada: (entrada: EntradaConObra) => void
 }) {
   const [obraId, setObraId] = useState('')
+  const [desde, setDesde] = useState(fechaAyerInput)
   const [tipo, setTipo] = useState<TipoEntrada>('nota')
   const [entradas, setEntradas] = useState<EntradaConObra[] | null>(null)
   const [cargando, setCargando] = useState(true)
@@ -623,31 +624,37 @@ function ModoSupervision({
   useEffect(() => {
     setCargando(true)
     setError(false)
-    listarEntradasSupervision(obraId || undefined)
+    listarEntradasSupervision(obraId || undefined, inicioDeDiaLocal(desde))
       .then(setEntradas)
       .catch((err) => {
         console.error('No se pudieron cargar las últimas entradas de tus obras:', err)
         setError(true)
       })
       .finally(() => setCargando(false))
-  }, [obraId])
+  }, [obraId, desde])
 
   const entradasFiltradas = (entradas ?? []).filter((e) => e.tipo === tipo)
 
   return (
     <div className="supervision">
-      <div className="field">
-        <label htmlFor="supervision-obra">Obra</label>
-        <select id="supervision-obra" value={obraId} onChange={(e) => setObraId(e.target.value)}>
-          <option value="">Todas las obras</option>
-          {obras?.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.nombre}
-            </option>
-          ))}
-        </select>
-        <p className="field-hint">Notas de hoy y ayer, más las observaciones que sigan sin atender.</p>
+      <div className="supervision-filtros">
+        <div className="field">
+          <label htmlFor="supervision-obra">Obra</label>
+          <select id="supervision-obra" value={obraId} onChange={(e) => setObraId(e.target.value)}>
+            <option value="">Todas las obras</option>
+            {obras?.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="supervision-desde">Notas desde</label>
+          <input id="supervision-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+        </div>
       </div>
+      <p className="field-hint">Notas desde esa fecha; las observaciones sin atender siempre se muestran.</p>
 
       <div className="tabs">
         <button type="button" className={`tab ${tipo === 'nota' ? 'tab-activa' : ''}`} onClick={() => setTipo('nota')}>
@@ -668,7 +675,7 @@ function ModoSupervision({
       )}
       {!cargando && !error && entradasFiltradas.length === 0 && (
         <p className="empty-state">
-          {tipo === 'nota' ? 'No hay notas nuevas hoy ni ayer.' : 'No hay observaciones pendientes.'}
+          {tipo === 'nota' ? 'No hay notas nuevas en ese rango de fechas.' : 'No hay observaciones pendientes.'}
         </p>
       )}
 
@@ -1493,6 +1500,25 @@ function inicioDeSemanaDe(fecha: Date): Date {
   const dia = fecha.getDay() // 0 = domingo
   const diasDesdeLunes = (dia + 6) % 7
   return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate() - diasDesdeLunes)
+}
+
+/** Ayer, en formato "YYYY-MM-DD" y hora local — valor inicial del "desde"
+ * en Modo supervisión (mismo rango que tenía antes de poder elegirlo). */
+function fechaAyerInput(): string {
+  const ayer = new Date()
+  ayer.setDate(ayer.getDate() - 1)
+  const yyyy = ayer.getFullYear()
+  const mm = String(ayer.getMonth() + 1).padStart(2, '0')
+  const dd = String(ayer.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+/** Convierte el valor de un `<input type="date">` ("YYYY-MM-DD") a un Date
+ * en hora LOCAL — `new Date("YYYY-MM-DD")` lo interpreta como medianoche
+ * UTC, lo que corre la fecha un día para casi cualquiera fuera de UTC. */
+function inicioDeDiaLocal(valor: string): Date {
+  const [y, m, d] = valor.split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
 }
 
 /** Calcula el rango [inicio, fin) y la etiqueta legible de la semana o mes

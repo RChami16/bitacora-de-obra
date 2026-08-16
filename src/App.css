@@ -575,6 +575,17 @@ button.secondary.small {
   gap: 16px;
 }
 
+.supervision-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.supervision-filtros .field {
+  flex: 1;
+  min-width: 150px;
+}
+
 .supervision-lista {
   display: flex;
   flex-direction: column;
@@ -967,4 +978,57 @@ button.secondary.small {
   color: var(--text-muted);
   padding: 40px 20px;
   font-size: 15px;
+}
+
+/* ============================================================
+   Escritorio: la app se diseñó primero para celular, pero en pantallas
+   anchas no debe verse igual (una sola columna angosta perdida en medio
+   de la pantalla) — aquí se acomoda el espacio de más y las listas pasan
+   de una sola columna larga a varias, cambiando el orden en que se leen
+   las cosas de "todo hacia abajo" a "de izquierda a derecha".
+   ============================================================ */
+@media (min-width: 768px) {
+  #root {
+    max-width: 1080px;
+  }
+
+  .app-header {
+    padding: 16px 32px;
+  }
+
+  .app-main {
+    padding: 28px 32px;
+  }
+
+  /* Formularios y vistas de una sola cosa a la vez: se quedan angostos y
+     centrados, para que no se estiren de borde a borde en pantallas
+     anchas (un campo de texto de 1000px se ve raro). */
+  .entry-form,
+  .obra-form,
+  .reporte-preview,
+  .obra-menu-cabecera,
+  .obra-menu-lista,
+  .auth-screen {
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+  }
+
+  /* Listas de tarjetas: en vez de una columna larguísima, se acomodan en
+     varias — el orden de lectura pasa a ser izquierda-a-derecha y luego
+     hacia abajo, como una cuadrícula, aprovechando el ancho disponible. */
+  .entry-list,
+  .supervision-lista,
+  .carpetas-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 1024px) {
+  #root {
+    max-width: 1280px;
+  }
 }
