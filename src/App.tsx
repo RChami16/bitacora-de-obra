@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import type { Session } from '@supabase/supabase-js'
 import {
@@ -106,6 +107,23 @@ function esErrorDeConexion(err: unknown): boolean {
   // CORS bloqueado); los errores que sí devuelve el servidor (RLS, SQL,
   // etc.) llegan como un objeto con código/mensaje, no como TypeError.
   return err instanceof TypeError
+}
+
+/** Envuelve un cambio de pantalla (entrar a una obra, volver atrás, etc.)
+ * con la View Transitions API del navegador, para que se sienta como un
+ * deslizamiento/desvanecido suave en vez de un salto seco. `flushSync`
+ * obliga a que el cambio de estado (y por lo tanto el redibujado) pase de
+ * forma síncrona, que es justo lo que la API espera para poder capturar el
+ * "antes" y el "después". En navegadores que no la soportan (Safari/
+ * Firefox viejos) simplemente se aplica el cambio normal, sin transición
+ * — no se rompe nada, solo no se ve la animación. */
+function conTransicionDeVista(cambiarEstado: () => void) {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown }
+  if (doc.startViewTransition) {
+    doc.startViewTransition(() => flushSync(cambiarEstado))
+  } else {
+    cambiarEstado()
+  }
 }
 
 function useOnlineStatus() {
@@ -1835,14 +1853,16 @@ function AppAutenticada({ session }: { session: Session }) {
   const listaActiva = pestana === 'nota' ? notas : observaciones
 
   function entrarAObra(id: string) {
-    setObraActivaId(id)
-    setObraActiva(obras?.find((o) => o.id === id) ?? null)
-    setVista('obra-menu')
-    setPestana('nota')
-    setOrigenSupervision(false)
-    setFormAbierto(false)
-    setReportePendiente(null)
-    setPidiendoPeriodo(null)
+    conTransicionDeVista(() => {
+      setObraActivaId(id)
+      setObraActiva(obras?.find((o) => o.id === id) ?? null)
+      setVista('obra-menu')
+      setPestana('nota')
+      setOrigenSupervision(false)
+      setFormAbierto(false)
+      setReportePendiente(null)
+      setPidiendoPeriodo(null)
+    })
   }
 
   /** Al tocar una tarjeta en Modo supervisión: entra directo a esa obra, en
@@ -1850,29 +1870,35 @@ function AppAutenticada({ session }: { session: Session }) {
    * por el menú de la obra — y recuerda que hay que poder volver a
    * Supervisión con un solo botón. */
   function entrarDesdeSupervision(entrada: EntradaConObra) {
-    setObraActivaId(entrada.obraId)
-    setObraActiva(obras?.find((o) => o.id === entrada.obraId) ?? null)
-    setPestana(entrada.tipo)
-    setSaltoSemana(claveSemana(entrada.fecha))
-    setOrigenSupervision(true)
-    setVista('diario')
-    setFormAbierto(false)
-    setReportePendiente(null)
-    setPidiendoPeriodo(null)
+    conTransicionDeVista(() => {
+      setObraActivaId(entrada.obraId)
+      setObraActiva(obras?.find((o) => o.id === entrada.obraId) ?? null)
+      setPestana(entrada.tipo)
+      setSaltoSemana(claveSemana(entrada.fecha))
+      setOrigenSupervision(true)
+      setVista('diario')
+      setFormAbierto(false)
+      setReportePendiente(null)
+      setPidiendoPeriodo(null)
+    })
   }
 
   function abrirDiario() {
-    setVista('diario')
-    setFormAbierto(false)
-    setReportePendiente(null)
-    setPidiendoPeriodo(null)
+    conTransicionDeVista(() => {
+      setVista('diario')
+      setFormAbierto(false)
+      setReportePendiente(null)
+      setPidiendoPeriodo(null)
+    })
   }
 
   function volverAMenuObra() {
-    setVista('obra-menu')
-    setFormAbierto(false)
-    setReportePendiente(null)
-    setPidiendoPeriodo(null)
+    conTransicionDeVista(() => {
+      setVista('obra-menu')
+      setFormAbierto(false)
+      setReportePendiente(null)
+      setPidiendoPeriodo(null)
+    })
   }
 
   /** El botón "←" del encabezado: si se entró desde Supervisión, un solo
@@ -1880,12 +1906,14 @@ function AppAutenticada({ session }: { session: Session }) {
    * un nivel como siempre. */
   function volverAtras() {
     if (vista === 'diario' && origenSupervision) {
-      setOrigenSupervision(false)
-      setVista('inicio')
-      setVistaHome('supervision')
-      setFormAbierto(false)
-      setReportePendiente(null)
-      setPidiendoPeriodo(null)
+      conTransicionDeVista(() => {
+        setOrigenSupervision(false)
+        setVista('inicio')
+        setVistaHome('supervision')
+        setFormAbierto(false)
+        setReportePendiente(null)
+        setPidiendoPeriodo(null)
+      })
       return
     }
     if (vista === 'diario') {
@@ -1896,10 +1924,12 @@ function AppAutenticada({ session }: { session: Session }) {
   }
 
   function volverAInicio() {
-    setVista('inicio')
-    setFormAbierto(false)
-    setReportePendiente(null)
-    setPidiendoPeriodo(null)
+    conTransicionDeVista(() => {
+      setVista('inicio')
+      setFormAbierto(false)
+      setReportePendiente(null)
+      setPidiendoPeriodo(null)
+    })
   }
 
   async function borrarEntrada(entrada: EntradaVista) {

@@ -1,7 +1,10 @@
 .app-header {
   padding: 16px 20px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border), 0 6px 20px rgba(45, 52, 54, 0.05);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1030,5 +1033,159 @@ button.secondary.small {
 @media (min-width: 1024px) {
   #root {
     max-width: 1280px;
+  }
+}
+
+/* ============================================================
+   Toques finales: profundidad, movimiento suave y una entrada
+   escalonada para las listas — para que la app se sienta cuidada y
+   no solo funcional.
+   ============================================================ */
+
+/* Ícono de obra con un pelín de relieve, para que no se vea plano. */
+.obra-icono {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15), var(--shadow-sm);
+}
+
+.obra-icono--nueva {
+  box-shadow: none;
+}
+
+/* Tarjetas/botones tipo tarjeta: al pasar el mouse (solo en dispositivos
+   con puntero, para no interferir con el toque en celular) se elevan un
+   poco — la misma transición ya viene del botón base en index.css. */
+@media (hover: hover) {
+  .obra-card-main,
+  .supervision-card,
+  .periodo-opcion,
+  .carpeta-semana-abrir,
+  .obra-menu-item,
+  .entry-borrar,
+  .obra-card-editar {
+    transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+
+  .obra-card-main:hover,
+  .supervision-card:hover,
+  .periodo-opcion:hover,
+  .carpeta-semana-abrir:hover,
+  .obra-menu-item:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--accent);
+  }
+
+  .obra-card-nueva:hover {
+    transform: translateY(-3px);
+    border-color: var(--accent);
+    color: var(--accent-dark);
+  }
+
+  .entry-borrar:hover {
+    background: rgba(192, 57, 43, 0.12);
+    color: var(--danger);
+  }
+
+  /* Las fotos hacen un ligero zoom al pasar el mouse — el marco redondeado
+     ya recorta el desborde (overflow: hidden), así que se ve limpio. */
+  .entry-thumb,
+  .supervision-foto-grande img,
+  .photo-thumb img,
+  .logo-preview {
+    transition: transform 0.35s var(--ease);
+  }
+
+  .entry-thumb-wrap:hover .entry-thumb,
+  .supervision-foto-grande:hover img,
+  .photo-thumb:hover img {
+    transform: scale(1.06);
+  }
+}
+
+.entry-thumb-wrap,
+.supervision-foto-grande {
+  overflow: hidden;
+}
+
+/* Entrada escalonada: cada tarjeta de una lista aparece con un ligero
+   deslizamiento hacia arriba, una detrás de otra, en vez de aparecer toda
+   la lista de golpe. */
+@keyframes tarjeta-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.entry-card,
+.supervision-card,
+.obra-card,
+.periodo-opcion,
+.carpeta-semana,
+.obra-menu-item {
+  animation: tarjeta-aparece 0.4s var(--ease) both;
+}
+
+.entry-list > *:nth-child(1),
+.supervision-lista > *:nth-child(1),
+.obra-grid > *:nth-child(1),
+.carpetas-lista > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.entry-list > *:nth-child(2),
+.supervision-lista > *:nth-child(2),
+.obra-grid > *:nth-child(2),
+.carpetas-lista > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.entry-list > *:nth-child(3),
+.supervision-lista > *:nth-child(3),
+.obra-grid > *:nth-child(3),
+.carpetas-lista > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.entry-list > *:nth-child(4),
+.supervision-lista > *:nth-child(4),
+.obra-grid > *:nth-child(4),
+.carpetas-lista > *:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.entry-list > *:nth-child(n + 5),
+.supervision-lista > *:nth-child(n + 5),
+.obra-grid > *:nth-child(n + 5),
+.carpetas-lista > *:nth-child(n + 5) {
+  animation-delay: 0.17s;
+}
+
+/* Los formularios/vistas previas se deslizan suavemente al aparecer. */
+@keyframes panel-aparece {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.entry-form,
+.obra-form,
+.reporte-preview,
+.periodo-elegir,
+.obra-menu-cabecera {
+  animation: panel-aparece 0.35s var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }
