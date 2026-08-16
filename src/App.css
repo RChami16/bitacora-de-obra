@@ -804,6 +804,19 @@ button.secondary.small {
   margin-top: 2px;
 }
 
+.categoria-select {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-top: 4px;
+  min-height: auto;
+}
+
 /* --- Estatus de una observación: selector con color según el estado --- */
 .estado-select {
   margin-top: 6px;

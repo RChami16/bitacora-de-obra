@@ -195,6 +195,13 @@ export async function crearEntrada(
   return { ...base, fotos: rutas }
 }
 
+/** Cambia el tipo de trabajo de una nota/observación ya creada (cualquiera
+ * con acceso a la obra, no solo quien la creó — igual que el estatus). */
+export async function actualizarCategoriaEntrada(id: string, categoria: CategoriaTrabajo): Promise<void> {
+  const { error } = await supabase.from('entradas').update({ categoria }).eq('id', id)
+  if (error) throw error
+}
+
 /** Cambia el estatus de una observación (la puede cambiar cualquiera con
  * acceso a la obra, no solo quien la creó). */
 export async function actualizarEstadoObservacion(id: string, estado: EstadoObservacion): Promise<void> {

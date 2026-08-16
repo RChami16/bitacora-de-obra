@@ -20,6 +20,7 @@ import {
   crearEntrada,
   subirFotosDeEntrada,
   actualizarEstadoObservacion,
+  actualizarCategoriaEntrada,
   eliminarEntrada,
   descargarFotoEntrada,
   type EntradaRemota,
@@ -685,6 +686,7 @@ function ModoSupervision({
                 {e.tipo === 'observacion' && e.estado && (
                   <span className={`estado-badge estado-${e.estado}`}>{etiquetaEstado(e.estado)}</span>
                 )}
+                {e.categoria && <span className="categoria-badge">{etiquetaCategoria(e.categoria)}</span>}
                 {e.texto && <p className="entry-note">{e.texto}</p>}
                 {e.autorEmail && (
                   <div className="entry-autor">
@@ -805,6 +807,10 @@ function EntradaForm({
       alert(tipo === 'nota' ? 'Agrega al menos una foto o una nota antes de guardar.' : 'Describe la observación o agrega al menos una foto.')
       return
     }
+    if (!categoria) {
+      alert('Elige el tipo de trabajo.')
+      return
+    }
     setGuardando(true)
     const datos = {
       obraId,
@@ -921,13 +927,15 @@ function EntradaForm({
       )}
 
       <div className="field">
-        <label htmlFor="categoria-trabajo">Tipo de trabajo (opcional)</label>
+        <label htmlFor="categoria-trabajo">Tipo de trabajo</label>
         <select
           id="categoria-trabajo"
           value={categoria}
           onChange={(e) => setCategoria(e.target.value as CategoriaTrabajo | '')}
         >
-          <option value="">Sin especificar</option>
+          <option value="" disabled>
+            Elige uno…
+          </option>
           {CATEGORIAS_TRABAJO.map((op) => (
             <option key={op.valor} value={op.valor}>
               {op.etiqueta}
@@ -1166,6 +1174,7 @@ function EntradaCard({
   puedeBorrar = true,
   onBorrar,
   onCambiarEstado,
+  onCambiarCategoria,
   onReintentar,
 }: {
   entrada: EntradaVista
@@ -1175,6 +1184,7 @@ function EntradaCard({
   puedeBorrar?: boolean
   onBorrar: () => void
   onCambiarEstado?: (estado: EstadoObservacion) => void
+  onCambiarCategoria?: (categoria: CategoriaTrabajo) => void
   onReintentar?: () => void
 }) {
   const primeraFotoLocal = entrada.fotosLocales[0]
@@ -1200,7 +1210,23 @@ function EntradaCard({
       )}
       <div className="entry-body">
         <div className="entry-date">{formatFecha(entrada.fecha)}</div>
-        {entrada.categoria && <span className="categoria-badge">{etiquetaCategoria(entrada.categoria)}</span>}
+        <select
+          className="categoria-select"
+          value={entrada.categoria ?? ''}
+          disabled={!onCambiarCategoria}
+          onChange={(e) => onCambiarCategoria?.(e.target.value as CategoriaTrabajo)}
+        >
+          {!entrada.categoria && (
+            <option value="" disabled>
+              Sin tipo de trabajo
+            </option>
+          )}
+          {CATEGORIAS_TRABAJO.map((op) => (
+            <option key={op.valor} value={op.valor}>
+              {op.etiqueta}
+            </option>
+          ))}
+        </select>
         {entrada.texto && <div className="entry-note">{entrada.texto}</div>}
         {entrada.autorEmail && (
           <div className="entry-autor">
@@ -1262,6 +1288,7 @@ interface EntradaBorrador {
   fecha: string
   fotos: Blob[]
   texto: string
+  categoria: CategoriaTrabajo | null
 }
 
 /** Una observación abierta (no atendida) al momento de armar el reporte —
@@ -1588,6 +1615,7 @@ function ListaPorSemanas({
   puedeBorrar,
   onBorrar,
   onCambiarEstado,
+  onCambiarCategoria,
   onReintentar,
 }: {
   obraId: string
@@ -1602,6 +1630,7 @@ function ListaPorSemanas({
   puedeBorrar: (entrada: EntradaVista) => boolean
   onBorrar: (entrada: EntradaVista) => void
   onCambiarEstado?: (entrada: EntradaVista, estado: EstadoObservacion) => void
+  onCambiarCategoria: (entrada: EntradaVista, categoria: CategoriaTrabajo) => void
   onReintentar: () => void
 }) {
   const [nombres, setNombres] = useState<Record<string, string>>({})
@@ -1681,6 +1710,7 @@ function ListaPorSemanas({
             puedeBorrar={puedeBorrar(e)}
             onBorrar={() => onBorrar(e)}
             onCambiarEstado={onCambiarEstado ? (estado) => onCambiarEstado(e, estado) : undefined}
+            onCambiarCategoria={(categoria) => onCambiarCategoria(e, categoria)}
             onReintentar={onReintentar}
           />
         ))}
@@ -1712,6 +1742,7 @@ async function construirEntradasBorrador(
         fecha: e.fecha,
         texto: e.texto?.trim() ?? '',
         estado: e.estado,
+        categoria: e.categoria,
         fotos: (await Promise.all(e.fotos.map((ruta) => descargarFotoEntrada(ruta)))).filter(
           (b): b is Blob => b !== null,
         ),
@@ -1725,6 +1756,7 @@ async function construirEntradasBorrador(
       fecha: e.fecha,
       texto: e.texto?.trim() ?? '',
       estado: e.estado ?? null,
+      categoria: e.categoria ?? null,
       fotos: almacenadasABlobs(e.fotos),
     }))
 
@@ -1877,6 +1909,19 @@ function AppAutenticada({ session }: { session: Session }) {
     }
   }
 
+  /** Cambia el tipo de trabajo de una nota/observación ya creada — lo puede
+   * hacer cualquiera con acceso a la obra, igual que el estatus. */
+  async function cambiarCategoriaEntrada(entrada: EntradaVista, categoria: CategoriaTrabajo) {
+    if (entrada.colaId !== undefined) {
+      await db.entradasCola.update(entrada.colaId, { categoria })
+      return
+    }
+    if (entrada.remotaId) {
+      await actualizarCategoriaEntrada(entrada.remotaId, categoria)
+      await (entrada.tipo === 'nota' ? notas.recargar() : observaciones.recargar())
+    }
+  }
+
   /** Junta las entradas del periodo, las observaciones todavía abiertas y
    * pide el resumen de IA — arma el borrador que se muestra en la vista
    * previa editable, sin generar el PDF todavía. */
@@ -1941,12 +1986,14 @@ function AppAutenticada({ session }: { session: Session }) {
       const entradasReporte: EntradaReporte[] = datos.entradas.map((e) => ({
         fecha: e.fecha,
         texto: e.texto,
+        categoria: e.categoria,
         fotos: e.fotos,
       }))
       const observacionesReporte: ObservacionReporte[] = (reportePendiente?.observaciones ?? []).map((o) => ({
         fecha: o.fecha,
         texto: o.texto,
         estado: o.estado,
+        categoria: o.categoria,
         fotos: o.fotos,
       }))
 
@@ -2131,6 +2178,7 @@ function AppAutenticada({ session }: { session: Session }) {
                 puedeBorrar={puedeBorrarEntrada}
                 onBorrar={borrarEntrada}
                 onCambiarEstado={pestana === 'observacion' ? cambiarEstadoObservacion : undefined}
+                onCambiarCategoria={cambiarCategoriaEntrada}
                 onReintentar={() => listaActiva.reintentarAhora()}
               />
             </>

@@ -104,14 +104,12 @@ async function prepararLogoParaPdf(
   }
 }
 
-function formatFechaLarga(iso: string) {
-  return new Date(iso).toLocaleString('es', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+const ETIQUETA_CATEGORIA: Record<string, string> = {
+  albanileria: 'Albañilería',
+  herreria: 'Herrería',
+  instalaciones: 'Instalaciones',
+  acabados: 'Acabados',
+  otro: 'Otro',
 }
 
 /** Una entrada ya lista para el PDF: texto final (nota + transcripción de
@@ -119,6 +117,7 @@ function formatFechaLarga(iso: string) {
 export interface EntradaReporte {
   fecha: string
   texto?: string
+  categoria?: string | null
   fotos: Blob[]
 }
 
@@ -128,6 +127,7 @@ export interface ObservacionReporte {
   fecha: string
   texto?: string
   estado: 'por_atender' | 'en_proceso' | 'atendido'
+  categoria?: string | null
   fotos: Blob[]
 }
 
@@ -256,32 +256,70 @@ export async function generarPdfReporte({
     }
   }
 
+  /** Escribe la fecha de una entrada con el día de la semana en negritas
+   * ("**Martes** 04 de agosto de 2026, 10:30") y, si se da, un sufijo
+   * normal después (el estatus de una observación). */
+  function dibujarFechaConDia(fechaIso: string, sufijo: string | undefined, x: number) {
+    const fecha = new Date(fechaIso)
+    const diaSemana = fecha.toLocaleDateString('es', { weekday: 'long' })
+    const diaSemanaCap = diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
+    const resto = fecha.toLocaleString('es', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    const restoCompleto = sufijo ? ` ${resto} — ${sufijo}` : ` ${resto}`
+
+    doc.setFontSize(9.5)
+    doc.setTextColor(90)
+    doc.setFont('helvetica', 'bold')
+    doc.text(diaSemanaCap, x, y)
+    const anchoDia = doc.getTextWidth(diaSemanaCap)
+
+    doc.setFont('helvetica', 'normal')
+    doc.text(restoCompleto, x + anchoDia, y)
+    doc.setTextColor(0)
+  }
+
   /** Dibuja una entrada (nota u observación) como un solo bloque: primero
-   * la(s) foto(s), luego el día como subtítulo chico justo debajo (para que
-   * quede claro que ese pie corresponde a esas fotos) y hasta abajo el
-   * comentario — así se lee como "foto → cuándo → qué se comenta de ella"
-   * en vez de una fecha y un texto sueltos arriba de una fila de fotos.
+   * la(s) foto(s), luego el día (con el día de la semana en negritas) y el
+   * tipo de trabajo justo debajo (para que quede claro que ese pie
+   * corresponde a esas fotos), y hasta abajo el comentario — así se lee
+   * como "foto → cuándo/qué trabajo → qué se comenta de ella" en vez de
+   * una fecha y un texto sueltos arriba de una fila de fotos.
    *
    * Antes de dibujar nada se calcula la altura completa del bloque y se
    * pide el salto de columna/página de una sola vez — así una foto nunca
    * queda en una hoja y su comentario en la siguiente: el bloque entero se
    * mueve junto a donde sí quepa. `obtenerX` se evalúa DESPUÉS de decidir
    * si hubo salto de columna, para dibujar del lado correcto. */
-  async function escribirBloqueEntrada(
-    fechaTexto: string,
-    texto: string | undefined | null,
-    fotos: Blob[],
-    obtenerX: () => number,
-    anchoDisponible: number,
-    cols: number,
-    salto: (alturaNecesaria: number) => void,
-  ) {
+  async function escribirBloqueEntrada(opciones: {
+    fechaIso: string
+    sufijo?: string
+    categoria?: string | null
+    texto?: string | null
+    fotos: Blob[]
+    obtenerX: () => number
+    anchoDisponible: number
+    cols: number
+    salto: (alturaNecesaria: number) => void
+  }) {
+    const { fechaIso, sufijo, categoria, texto, fotos, obtenerX, anchoDisponible, cols, salto } = opciones
+
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10.5)
     const lineasTexto = texto?.trim() ? doc.splitTextToSize(texto.trim(), anchoDisponible) : []
+    const etiquetaCat = categoria ? (ETIQUETA_CATEGORIA[categoria] ?? categoria) : null
     // +14 de colchón para la rayita divisoria que va justo después del
     // bloque, así nunca queda pegada al borde inferior de la columna.
-    const alturaBloque = alturaGridFotos(fotos.length, anchoDisponible, cols) + 13 + lineasTexto.length * 14 + 14
+    const alturaBloque =
+      alturaGridFotos(fotos.length, anchoDisponible, cols) +
+      13 +
+      (etiquetaCat ? 12 : 0) +
+      lineasTexto.length * 14 +
+      14
 
     salto(alturaBloque)
     const x = obtenerX()
@@ -290,12 +328,17 @@ export async function generarPdfReporte({
 
     await dibujarGridFotos(fotos, x, anchoDisponible, cols, salto)
 
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(9.5)
-    doc.setTextColor(120)
-    doc.text(fechaTexto, x, y)
-    doc.setTextColor(0)
+    dibujarFechaConDia(fechaIso, sufijo, x)
     y += 13
+
+    if (etiquetaCat) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(150)
+      doc.text(etiquetaCat, x, y)
+      doc.setTextColor(0)
+      y += 12
+    }
 
     if (lineasTexto.length > 0) {
       doc.setFont('helvetica', 'normal')
@@ -325,20 +368,50 @@ export async function generarPdfReporte({
   }
 
   // --- Encabezado / portada ---
-  // El logo de la empresa (si hay) va arriba a la derecha; el texto del
-  // encabezado se limita a lo que quede a la izquierda para no encimarse.
-  let anchoTextoEncabezado = contentW
+  // El logo (si hay) y los datos de la empresa van arriba a la derecha, el
+  // logo primero y los datos justo debajo de él — separados del título y
+  // los datos del periodo, que van a la izquierda.
+  const ANCHO_DERECHA = 170
+  const xDerecha = pageW - margin - ANCHO_DERECHA
+  let yDerecha = margin
+
   if (empresaLogoUrl) {
     const logoBlob = await cargarBlobDesdeUrl(empresaLogoUrl)
     if (logoBlob) {
       const LOGO_MAX = 64
       const logo = await prepararLogoParaPdf(logoBlob, LOGO_MAX, LOGO_MAX)
       if (logo) {
-        doc.addImage(logo.dataUrl, 'PNG', pageW - margin - logo.width, y, logo.width, logo.height)
-        anchoTextoEncabezado = contentW - logo.width - 16
+        doc.addImage(logo.dataUrl, 'PNG', pageW - margin - logo.width, yDerecha, logo.width, logo.height)
+        yDerecha += logo.height + 8
       }
     }
   }
+
+  if (empresaNombre?.trim()) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10.5)
+    doc.setTextColor(90)
+    const lineasNombre = doc.splitTextToSize(empresaNombre.trim(), ANCHO_DERECHA)
+    for (const linea of lineasNombre) {
+      doc.text(linea, xDerecha, yDerecha)
+      yDerecha += 13
+    }
+  }
+  if (empresaDatos?.trim()) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(130)
+    const lineasDatos = empresaDatos
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .flatMap((l) => doc.splitTextToSize(l, ANCHO_DERECHA))
+    for (const linea of lineasDatos) {
+      doc.text(linea, xDerecha, yDerecha)
+      yDerecha += 11.5
+    }
+  }
+  doc.setTextColor(0)
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(20)
@@ -350,24 +423,6 @@ export async function generarPdfReporte({
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(11)
   doc.setTextColor(110)
-  if (empresaNombre?.trim()) {
-    doc.text(empresaNombre.trim(), margin, y)
-    y += 15
-  }
-  if (empresaDatos?.trim()) {
-    doc.setFontSize(9.5)
-    const lineasEmpresa = empresaDatos
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .flatMap((l) => doc.splitTextToSize(l, anchoTextoEncabezado))
-    for (const linea of lineasEmpresa) {
-      doc.text(linea, margin, y)
-      y += 12
-    }
-    doc.setFontSize(11)
-    y += 3
-  }
   doc.text(periodoLabel, margin, y)
   y += 15
   const generadoEl = new Date().toLocaleDateString('es', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -378,8 +433,10 @@ export async function generarPdfReporte({
     y += 15
   }
   doc.setTextColor(0)
-  void anchoTextoEncabezado // el texto del encabezado es corto por diseño; se deja el ancho calculado por si crece.
-  y += 12
+  // El resto del PDF empieza debajo de lo que haya quedado más alto —
+  // el bloque del título o el de la empresa/logo — para que nunca se
+  // encimen si alguno creció más de lo normal.
+  y = Math.max(y, yDerecha) + 12
 
   // --- Resumen narrativo y comentarios generales ---
   if (resumen && resumen.trim()) {
@@ -452,7 +509,16 @@ export async function generarPdfReporte({
     for (let idx = 0; idx < entradas.length; idx++) {
       const entrada = entradas[idx]
       const { x, guardar } = columnaPara(idx)
-      await escribirBloqueEntrada(formatFechaLarga(entrada.fecha), entrada.texto, entrada.fotos, () => x, colW, 1, salto)
+      await escribirBloqueEntrada({
+        fechaIso: entrada.fecha,
+        categoria: entrada.categoria,
+        texto: entrada.texto,
+        fotos: entrada.fotos,
+        obtenerX: () => x,
+        anchoDisponible: colW,
+        cols: 1,
+        salto,
+      })
       guardar()
     }
   }
@@ -476,7 +542,17 @@ export async function generarPdfReporte({
       const obs = observacionesSinAtender[idx]
       const etiqueta = ETIQUETA_ESTADO_OBSERVACION[obs.estado] ?? obs.estado
       const { x, guardar } = columnaPara(idx)
-      await escribirBloqueEntrada(`${formatFechaLarga(obs.fecha)} — ${etiqueta}`, obs.texto, obs.fotos, () => x, colW, 1, salto)
+      await escribirBloqueEntrada({
+        fechaIso: obs.fecha,
+        sufijo: etiqueta,
+        categoria: obs.categoria,
+        texto: obs.texto,
+        fotos: obs.fotos,
+        obtenerX: () => x,
+        anchoDisponible: colW,
+        cols: 1,
+        salto,
+      })
       guardar()
     }
   }
