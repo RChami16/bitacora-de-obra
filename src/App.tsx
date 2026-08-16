@@ -1707,6 +1707,7 @@ function AppAutenticada({ session }: { session: Session }) {
   const [origenSupervision, setOrigenSupervision] = useState(false)
   const [formAbierto, setFormAbierto] = useState(false)
   const [fechaReporte, setFechaReporte] = useState(fechaInputHoy)
+  const [pidiendoPeriodo, setPidiendoPeriodo] = useState<'semana' | 'mes' | null>(null)
   const [generandoReporte, setGenerandoReporte] = useState<'semana' | 'mes' | null>(null)
   const [reportePendiente, setReportePendiente] = useState<{
     periodoLabel: string
@@ -1743,6 +1744,7 @@ function AppAutenticada({ session }: { session: Session }) {
     setOrigenSupervision(false)
     setFormAbierto(false)
     setReportePendiente(null)
+    setPidiendoPeriodo(null)
   }
 
   /** Al tocar una tarjeta en Modo supervisión: entra directo a esa obra, en
@@ -1758,18 +1760,21 @@ function AppAutenticada({ session }: { session: Session }) {
     setVista('diario')
     setFormAbierto(false)
     setReportePendiente(null)
+    setPidiendoPeriodo(null)
   }
 
   function abrirDiario() {
     setVista('diario')
     setFormAbierto(false)
     setReportePendiente(null)
+    setPidiendoPeriodo(null)
   }
 
   function volverAMenuObra() {
     setVista('obra-menu')
     setFormAbierto(false)
     setReportePendiente(null)
+    setPidiendoPeriodo(null)
   }
 
   /** El botón "←" del encabezado: si se entró desde Supervisión, un solo
@@ -1782,6 +1787,7 @@ function AppAutenticada({ session }: { session: Session }) {
       setVistaHome('supervision')
       setFormAbierto(false)
       setReportePendiente(null)
+      setPidiendoPeriodo(null)
       return
     }
     if (vista === 'diario') {
@@ -1795,6 +1801,7 @@ function AppAutenticada({ session }: { session: Session }) {
     setVista('inicio')
     setFormAbierto(false)
     setReportePendiente(null)
+    setPidiendoPeriodo(null)
   }
 
   async function borrarEntrada(entrada: EntradaVista) {
@@ -2039,40 +2046,65 @@ function AppAutenticada({ session }: { session: Session }) {
                     {pestana === 'nota' ? 'Nueva nota' : 'Nueva observación'}
                   </button>
 
-                  {pestana === 'nota' && (
-                    <div className="reportes">
-                      <div className="field">
-                        <label htmlFor="reporte-fecha-ref">Semana o mes a reportar</label>
-                        <input
-                          id="reporte-fecha-ref"
-                          type="date"
-                          value={fechaReporte}
-                          onChange={(e) => setFechaReporte(e.target.value)}
-                        />
-                        <p className="field-hint">Elige cualquier día de la semana o el mes que quieres reportar.</p>
-                      </div>
+                  {pestana === 'nota' &&
+                    (pidiendoPeriodo === null ? (
                       <div className="reportes-bar">
                         <button
                           type="button"
                           className="secondary"
                           disabled={generandoReporte !== null}
-                          onClick={() => prepararReporte('semana', parsearFechaInputLocal(fechaReporte))}
+                          onClick={() => setPidiendoPeriodo('semana')}
                         >
                           <IconDocumento size={15} />
-                          {generandoReporte === 'semana' ? 'Preparando…' : 'Reporte semanal'}
+                          Reporte semanal
                         </button>
                         <button
                           type="button"
                           className="secondary"
                           disabled={generandoReporte !== null}
-                          onClick={() => prepararReporte('mes', parsearFechaInputLocal(fechaReporte))}
+                          onClick={() => setPidiendoPeriodo('mes')}
                         >
                           <IconDocumento size={15} />
-                          {generandoReporte === 'mes' ? 'Preparando…' : 'Reporte mensual'}
+                          Reporte mensual
                         </button>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="reportes">
+                        <div className="field">
+                          <label htmlFor="reporte-fecha-ref">
+                            {pidiendoPeriodo === 'semana' ? '¿De qué semana?' : '¿De qué mes?'}
+                          </label>
+                          <input
+                            id="reporte-fecha-ref"
+                            type="date"
+                            value={fechaReporte}
+                            onChange={(e) => setFechaReporte(e.target.value)}
+                            autoFocus
+                          />
+                          <p className="field-hint">
+                            Elige cualquier día de la {pidiendoPeriodo === 'semana' ? 'semana' : 'mes'} que quieres
+                            reportar.
+                          </p>
+                        </div>
+                        <div className="reportes-bar">
+                          <button type="button" className="secondary" onClick={() => setPidiendoPeriodo(null)}>
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={generandoReporte !== null}
+                            onClick={async () => {
+                              await prepararReporte(pidiendoPeriodo, parsearFechaInputLocal(fechaReporte))
+                              setPidiendoPeriodo(null)
+                            }}
+                          >
+                            <IconDocumento size={15} />
+                            {generandoReporte !== null ? 'Preparando…' : 'Generar reporte'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                 </>
               )}
 
