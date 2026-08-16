@@ -71,6 +71,16 @@ export function IconUsuario({ size = 14, className }: IconProps) {
   )
 }
 
+export function IconPersonas({ size = 20, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" className={className} {...base}>
+      <circle cx="7.2" cy="6.3" r="2.6" />
+      <path d="M2 16c.7-2.9 2.6-4.3 5.2-4.3s4.5 1.4 5.2 4.3" />
+      <path d="M12.6 4.3a2.6 2.6 0 010 4.9M15.3 11.3c2 .5 3.1 1.8 3.7 4.2" />
+    </svg>
+  )
+}
+
 export function IconDocumento({ size = 16, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" className={className} {...base}>

@@ -264,3 +264,36 @@ create policy "entradas_delete_propias_o_dueno" on public.entradas
     autor = auth.uid()
     or exists (select 1 from public.obras o where o.id = obra_id and o.creado_por = auth.uid())
   );
+
+-- ============================================================
+-- PARTE 7 — Personal en obra: cuántas personas de cada tipo de trabajo
+-- están hoy en cada obra. Un renglón por obra+día+tipo de trabajo
+-- (guardar de nuevo el mismo día actualiza la cantidad en vez de duplicar).
+-- Cualquier miembro de la obra puede ver y actualizar esto, igual que el
+-- estatus de una observación.
+-- ============================================================
+create table if not exists public.personal_obra (
+  obra_id uuid not null references public.obras(id) on delete cascade,
+  fecha date not null,
+  categoria text not null check (categoria in ('albanileria', 'herreria', 'instalaciones', 'acabados', 'otro')),
+  -- Solo se usa cuando categoria = 'otro', para decir de qué trabajo se trata.
+  otro_detalle text,
+  cantidad int not null default 0 check (cantidad >= 0),
+  actualizado_por uuid references auth.users(id),
+  actualizado_en timestamptz not null default now(),
+  primary key (obra_id, fecha, categoria)
+);
+
+alter table public.personal_obra enable row level security;
+
+drop policy if exists "personal_obra_select" on public.personal_obra;
+create policy "personal_obra_select" on public.personal_obra
+  for select using (public.es_miembro_obra(obra_id));
+
+drop policy if exists "personal_obra_insert" on public.personal_obra;
+create policy "personal_obra_insert" on public.personal_obra
+  for insert with check (public.es_miembro_obra(obra_id));
+
+drop policy if exists "personal_obra_update" on public.personal_obra;
+create policy "personal_obra_update" on public.personal_obra
+  for update using (public.es_miembro_obra(obra_id));

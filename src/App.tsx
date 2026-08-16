@@ -28,6 +28,12 @@ import {
   type EntradaConObra,
 } from './entradasApi'
 import { listarNombresSemana, renombrarSemana } from './semanasApi'
+import {
+  obtenerPersonalHoy,
+  guardarPersonalObra,
+  listarPersonalHoySupervision,
+  type PersonalConObra,
+} from './personalApi'
 import { AuthScreen } from './AuthScreen'
 import { leerFechaExif } from './exif'
 import { obtenerResumenIA } from './resumenApi'
@@ -43,6 +49,7 @@ import {
   IconCerrar,
   IconEdificio,
   IconDiario,
+  IconPersonas,
   IconOjo,
   IconCarpeta,
   IconFlechaIzquierda,
@@ -674,6 +681,8 @@ function ModoSupervision({
       </div>
       <p className="field-hint">Notas desde esa fecha; las observaciones sin atender siempre se muestran.</p>
 
+      <PersonalSupervision obraId={obraId} />
+
       <div className="tabs">
         <button type="button" className={`tab ${tipo === 'nota' ? 'tab-activa' : ''}`} onClick={() => setTipo('nota')}>
           Entradas
@@ -728,6 +737,57 @@ function ModoSupervision({
   )
 }
 
+/** Resumen del personal de hoy para Modo supervisión — junta el de todas
+ * las obras visibles (o solo una, si se filtró por obra) y lo agrupa por
+ * obra. No se muestra nada si nadie ha reportado personal todavía hoy. */
+function PersonalSupervision({ obraId }: { obraId: string }) {
+  const [datos, setDatos] = useState<PersonalConObra[] | null>(null)
+
+  useEffect(() => {
+    let cancelado = false
+    listarPersonalHoySupervision(obraId || undefined)
+      .then((d) => !cancelado && setDatos(d))
+      .catch((err) => console.error('No se pudo cargar el personal en obra:', err))
+    return () => {
+      cancelado = true
+    }
+  }, [obraId])
+
+  if (!datos || datos.length === 0) return null
+
+  const porObra = new Map<string, { obraNombre: string; filas: PersonalConObra[]; total: number }>()
+  for (const d of datos) {
+    const grupo = porObra.get(d.obraId) ?? { obraNombre: d.obraNombre, filas: [], total: 0 }
+    grupo.filas.push(d)
+    grupo.total += d.cantidad
+    porObra.set(d.obraId, grupo)
+  }
+
+  return (
+    <div className="personal-supervision">
+      <h3>
+        <IconPersonas size={16} /> Personal en obra hoy
+      </h3>
+      <div className="personal-supervision-lista">
+        {[...porObra.entries()].map(([id, grupo]) => (
+          <div key={id} className="personal-supervision-obra">
+            {!obraId && <span className="personal-supervision-obra-nombre">{grupo.obraNombre}</span>}
+            <div className="personal-supervision-chips">
+              {grupo.filas.map((f) => (
+                <span key={f.categoria} className="categoria-badge">
+                  {etiquetaCategoria(f.categoria)}
+                  {f.categoria === 'otro' && f.otroDetalle ? ` (${f.otroDetalle})` : ''}: {f.cantidad}
+                </span>
+              ))}
+              <span className="personal-supervision-total">{grupo.total} en total</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Menú de una obra: por ahora solo tiene el Diario de obra (notas,
  * observaciones y reportes), pero queda listo para agregar más apartados
  * más adelante sin tener que rehacer la navegación. */
@@ -754,7 +814,130 @@ function ObraMenu({ obra, onAbrirDiario }: { obra: Obra; onAbrirDiario: () => vo
           <IconFlechaDerecha className="obra-menu-item-flecha" />
         </button>
       </nav>
+
+      <PersonalEnObra obraId={obra.id} />
     </main>
+  )
+}
+
+/** Cuántas personas de cada tipo de trabajo hay hoy en la obra — se llena
+ * a mano y cualquiera del equipo lo puede actualizar durante el día. */
+function PersonalEnObra({ obraId }: { obraId: string }) {
+  type FilaLocal = { cantidad: string; otroDetalle: string }
+  const vacio = (): Record<CategoriaTrabajo, FilaLocal> =>
+    Object.fromEntries(CATEGORIAS_TRABAJO.map((c) => [c.valor, { cantidad: '0', otroDetalle: '' }])) as Record<
+      CategoriaTrabajo,
+      FilaLocal
+    >
+
+  const [filas, setFilas] = useState<Record<CategoriaTrabajo, FilaLocal> | null>(null)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [guardado, setGuardado] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+    setCargando(true)
+    setError(false)
+    obtenerPersonalHoy(obraId)
+      .then((datos) => {
+        if (cancelado) return
+        const iniciales = vacio()
+        for (const d of datos) {
+          iniciales[d.categoria] = { cantidad: String(d.cantidad), otroDetalle: d.otroDetalle ?? '' }
+        }
+        setFilas(iniciales)
+      })
+      .catch((err) => {
+        console.error('No se pudo cargar el personal de hoy:', err)
+        if (!cancelado) setError(true)
+      })
+      .finally(() => !cancelado && setCargando(false))
+    return () => {
+      cancelado = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [obraId])
+
+  function cambiarCantidad(categoria: CategoriaTrabajo, cantidad: string) {
+    setFilas((prev) => (prev ? { ...prev, [categoria]: { ...prev[categoria], cantidad } } : prev))
+  }
+
+  function cambiarDetalle(categoria: CategoriaTrabajo, otroDetalle: string) {
+    setFilas((prev) => (prev ? { ...prev, [categoria]: { ...prev[categoria], otroDetalle } } : prev))
+  }
+
+  async function guardar() {
+    if (!filas) return
+    setGuardando(true)
+    setGuardado(false)
+    try {
+      await guardarPersonalObra(
+        obraId,
+        CATEGORIAS_TRABAJO.map((c) => ({
+          categoria: c.valor,
+          cantidad: Math.max(0, Math.round(Number(filas[c.valor].cantidad)) || 0),
+          otroDetalle: filas[c.valor].otroDetalle,
+        })),
+      )
+      setGuardado(true)
+      setTimeout(() => setGuardado(false), 2500)
+    } catch (err) {
+      console.error('No se pudo guardar el personal en obra:', err)
+      alert('No se pudo guardar. Revisa tu conexión e intenta de nuevo.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const total = filas
+    ? Object.values(filas).reduce((acc, f) => acc + (Math.round(Number(f.cantidad)) || 0), 0)
+    : 0
+
+  return (
+    <section className="personal-obra">
+      <h2>
+        <IconPersonas size={18} /> Personal en obra hoy
+      </h2>
+      {cargando && <p className="empty-state">Cargando…</p>}
+      {!cargando && error && <p className="empty-state">No se pudo cargar. Revisa tu conexión e intenta de nuevo.</p>}
+      {!cargando && !error && filas && (
+        <>
+          <div className="personal-lista">
+            {CATEGORIAS_TRABAJO.map((c) => (
+              <div key={c.valor} className="personal-fila">
+                <label htmlFor={`personal-${c.valor}`}>{c.etiqueta}</label>
+                {c.valor === 'otro' && (
+                  <input
+                    className="personal-otro-detalle"
+                    type="text"
+                    placeholder="¿De qué trabajo?"
+                    value={filas.otro.otroDetalle}
+                    onChange={(e) => cambiarDetalle('otro', e.target.value)}
+                  />
+                )}
+                <input
+                  id={`personal-${c.valor}`}
+                  className="personal-cantidad"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  value={filas[c.valor].cantidad}
+                  onChange={(e) => cambiarCantidad(c.valor, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="personal-total">
+            Total: <strong>{total}</strong> {total === 1 ? 'persona' : 'personas'}
+          </div>
+          <button type="button" className="secondary" onClick={guardar} disabled={guardando}>
+            {guardando ? 'Guardando…' : guardado ? '✓ Guardado' : 'Guardar'}
+          </button>
+        </>
+      )}
+    </section>
   )
 }
 

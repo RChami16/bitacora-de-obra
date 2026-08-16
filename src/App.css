@@ -80,6 +80,119 @@
 .app-main h2 {
   font-size: 18px;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- Personal en obra: cuántas personas de cada tipo de trabajo hay hoy,
+   dentro del menú de la obra (ObraMenu) --- */
+.personal-obra {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: var(--shadow);
+}
+
+.personal-obra h2 {
+  color: var(--accent-dark);
+}
+
+.personal-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personal-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.personal-fila label {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.personal-otro-detalle {
+  flex: 1.4;
+  min-width: 0;
+}
+
+.personal-cantidad {
+  width: 68px;
+  flex-shrink: 0;
+  text-align: center;
+  padding: 12px 8px;
+}
+
+.personal-total {
+  font-size: 14px;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+
+.personal-total strong {
+  color: var(--accent-dark);
+  font-size: 17px;
+}
+
+/* --- Personal en obra dentro de Modo supervisión: resumen por obra --- */
+.personal-supervision {
+  background: var(--accent-bg);
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personal-supervision h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--accent-dark);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.personal-supervision-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personal-supervision-obra {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.personal-supervision-obra-nombre {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.personal-supervision-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.personal-supervision-total {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
 }
 
 /* --- Ícono circular de una obra (imagen propia o color + inicial) --- */
