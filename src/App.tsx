@@ -1475,22 +1475,36 @@ function calcularPeriodo(
   return { inicio, fin, label }
 }
 
-/** Convierte el valor de un `<input type="date">` ("YYYY-MM-DD") a un Date
- * en hora LOCAL — `new Date("YYYY-MM-DD")` lo interpreta como medianoche
- * UTC, lo que corre la fecha un día para casi cualquiera fuera de UTC. */
-function parsearFechaInputLocal(valor: string): Date {
-  const [y, m, d] = valor.split('-').map(Number)
-  return new Date(y, (m || 1) - 1, d || 1)
+/** Una opción de periodo para elegir al generar un reporte: una fecha
+ * cualquiera dentro de esa semana/mes (para pasarle a `calcularPeriodo`) y
+ * la etiqueta ya armada para mostrar en el botón. */
+interface OpcionPeriodo {
+  referencia: Date
+  etiqueta: string
 }
 
-/** Hoy, en formato "YYYY-MM-DD" y hora local — para el valor inicial del
- * selector de semana/mes a reportar. */
-function fechaInputHoy(): string {
+/** Las últimas 3 semanas (la actual y las 2 anteriores), como "dd/mm/aa –
+ * dd/mm/aa" — mismo estilo que las carpetas por semana del diario. */
+function ultimasSemanas(): OpcionPeriodo[] {
   const hoy = new Date()
-  const yyyy = hoy.getFullYear()
-  const mm = String(hoy.getMonth() + 1).padStart(2, '0')
-  const dd = String(hoy.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return [0, 1, 2].map((i) => {
+    const referencia = new Date(hoy)
+    referencia.setDate(referencia.getDate() - i * 7)
+    const inicio = inicioDeSemanaDe(referencia)
+    const fin = new Date(inicio)
+    fin.setDate(fin.getDate() + 6)
+    return { referencia, etiqueta: `${formatCorto(inicio)} – ${formatCorto(fin)}` }
+  })
+}
+
+/** Los últimos 3 meses (el actual y los 2 anteriores), como "Agosto 2026". */
+function ultimosMeses(): OpcionPeriodo[] {
+  const hoy = new Date()
+  return [0, 1, 2].map((i) => {
+    const referencia = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1)
+    const mesTexto = referencia.toLocaleDateString('es', { month: 'long', year: 'numeric' })
+    return { referencia, etiqueta: mesTexto.charAt(0).toUpperCase() + mesTexto.slice(1) }
+  })
 }
 
 /** Clave estable de la semana a la que pertenece una fecha: "YYYY-MM-DD"
@@ -1706,7 +1720,6 @@ function AppAutenticada({ session }: { session: Session }) {
   const [saltoSemana, setSaltoSemana] = useState<string | null>(null)
   const [origenSupervision, setOrigenSupervision] = useState(false)
   const [formAbierto, setFormAbierto] = useState(false)
-  const [fechaReporte, setFechaReporte] = useState(fechaInputHoy)
   const [pidiendoPeriodo, setPidiendoPeriodo] = useState<'semana' | 'mes' | null>(null)
   const [generandoReporte, setGenerandoReporte] = useState<'semana' | 'mes' | null>(null)
   const [reportePendiente, setReportePendiente] = useState<{
@@ -2069,40 +2082,31 @@ function AppAutenticada({ session }: { session: Session }) {
                         </button>
                       </div>
                     ) : (
-                      <div className="reportes">
-                        <div className="field">
-                          <label htmlFor="reporte-fecha-ref">
-                            {pidiendoPeriodo === 'semana' ? '¿De qué semana?' : '¿De qué mes?'}
-                          </label>
-                          <input
-                            id="reporte-fecha-ref"
-                            type="date"
-                            value={fechaReporte}
-                            onChange={(e) => setFechaReporte(e.target.value)}
-                            autoFocus
-                          />
-                          <p className="field-hint">
-                            Elige cualquier día de la {pidiendoPeriodo === 'semana' ? 'semana' : 'mes'} que quieres
-                            reportar.
-                          </p>
-                        </div>
-                        <div className="reportes-bar">
-                          <button type="button" className="secondary" onClick={() => setPidiendoPeriodo(null)}>
-                            Cancelar
-                          </button>
+                      <div className="periodo-elegir">
+                        <p className="field-hint">
+                          {pidiendoPeriodo === 'semana' ? '¿De qué semana?' : '¿De qué mes?'}
+                        </p>
+                        {(pidiendoPeriodo === 'semana' ? ultimasSemanas() : ultimosMeses()).map((op, i) => (
                           <button
+                            key={i}
                             type="button"
-                            className="primary"
+                            className="periodo-opcion"
                             disabled={generandoReporte !== null}
                             onClick={async () => {
-                              await prepararReporte(pidiendoPeriodo, parsearFechaInputLocal(fechaReporte))
+                              await prepararReporte(pidiendoPeriodo, op.referencia)
                               setPidiendoPeriodo(null)
                             }}
                           >
                             <IconDocumento size={15} />
-                            {generandoReporte !== null ? 'Preparando…' : 'Generar reporte'}
+                            <span>
+                              {op.etiqueta}
+                              {i === 0 && <em> (actual)</em>}
+                            </span>
                           </button>
-                        </div>
+                        ))}
+                        <button type="button" className="periodo-cancelar" onClick={() => setPidiendoPeriodo(null)}>
+                          Cancelar
+                        </button>
                       </div>
                     ))}
                 </>

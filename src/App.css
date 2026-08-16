@@ -331,10 +331,37 @@ button.secondary.small {
   box-shadow: var(--shadow);
 }
 
-.reportes {
+/* --- Elegir semana/mes al generar un reporte: lista de opciones en vez
+   de un calendario --- */
+.periodo-elegir {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+}
+
+.periodo-opcion {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  justify-content: flex-start;
+  text-align: left;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.periodo-opcion em {
+  font-style: normal;
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.periodo-cancelar {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-weight: 600;
+  min-height: auto;
+  padding: 6px 0 0;
 }
 
 .reportes-bar {
