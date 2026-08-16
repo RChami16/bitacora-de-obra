@@ -1,3 +1,17 @@
+/* Tipografía "de marca" para títulos, botones y etiquetas — guardada en el
+   propio proyecto (no en un CDN externo) para que cargue rápido y siga
+   funcionando con mala señal en obra. Un font variable cubre los tres
+   pesos que se usan (500 a 800) en un solo archivo chico (~24kB). El texto
+   de lectura (notas, párrafos) se queda en la tipografía del sistema, más
+   legible en pantallas chicas o con reflejo de sol. */
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/manrope-variable.woff2') format('woff2-variations'), url('/fonts/manrope-variable.woff2') format('woff2');
+  font-weight: 500 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Paleta "obra amigable": naranja casco de seguridad + grises concreto,
      sobre un fondo cálido en vez de blanco puro/gris frío de oficina. */
@@ -27,6 +41,7 @@
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans-display: 'Manrope', var(--sans);
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -85,7 +100,9 @@ body {
 h1, h2, h3 {
   margin: 0;
   color: var(--text);
-  letter-spacing: -0.01em;
+  font-family: var(--sans-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 ::selection {
@@ -103,10 +120,12 @@ h1, h2, h3 {
    con una transición pareja para que presionar/soltar se sienta suave. */
 button {
   font: inherit;
-  font-size: 17px;
-  font-weight: 600;
+  font-family: var(--sans-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   min-height: 56px;
-  border-radius: 14px;
+  border-radius: 16px;
   border: none;
   cursor: pointer;
   padding: 14px 20px;
@@ -199,8 +218,11 @@ input[type="datetime-local"] {
 }
 
 label {
-  font-size: 14px;
-  font-weight: 600;
+  font-family: var(--sans-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--text-muted);
   display: block;
   margin-bottom: 6px;

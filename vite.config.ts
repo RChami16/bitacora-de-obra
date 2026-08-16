@@ -34,8 +34,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Cachea el shell de la app para que abra offline.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // Cachea el shell de la app para que abra offline (incluye la
+        // tipografía propia en woff2, si no se quedaría sin cargar sin señal).
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         // Las fotos/audio no pasan por aquí: se guardan directo en IndexedDB.
         runtimeCaching: [],
       },
