@@ -450,45 +450,6 @@ export async function generarPdfReporte({
     }
   }
 
-  /** Arma el estado de un listado de entradas en dos columnas (para no
-   * dejar tanto espacio en blanco cuando una entrada es corta). Las
-   * entradas ALTERNAN de columna en orden (1ª izquierda, 2ª derecha, 3ª
-   * izquierda…) en vez de llenar toda la izquierda antes de empezar la
-   * derecha — así el orden cronológico coincide con el orden de lectura
-   * normal (izquierda a derecha, de arriba hacia abajo), en vez de tener
-   * que leer toda una columna y saltar hasta arriba de la otra. */
-  function crearColumnas() {
-    const COL_GAP = 24
-    const colW = (contentW - COL_GAP) / 2
-    const colX: [number, number] = [margin, margin + colW + COL_GAP]
-    const yCols: [number, number] = [y, y]
-
-    function salto(alturaNecesaria: number) {
-      if (y + alturaNecesaria > pageH - margin) {
-        doc.addPage()
-        yCols[0] = margin
-        yCols[1] = margin
-        y = margin
-      }
-    }
-
-    /** Ubica la entrada número `indice` (0, 1, 2…) en su columna
-     * correspondiente. Hay que llamar a `guardar()` justo después de
-     * dibujarla, para recordar dónde quedó esa columna. */
-    function columnaPara(indice: number) {
-      const columna = (indice % 2) as 0 | 1
-      y = yCols[columna]
-      return {
-        x: colX[columna],
-        guardar: () => {
-          yCols[columna] = y
-        },
-      }
-    }
-
-    return { colW, salto, columnaPara }
-  }
-
   saltoDePaginaSiHaceFalta(20)
   doc.setDrawColor(220)
   doc.line(margin, y, pageW - margin, y)
@@ -505,21 +466,22 @@ export async function generarPdfReporte({
     doc.text('No hubo entradas registradas en este periodo.', margin, y)
     y += 20
   } else {
-    const { colW, salto, columnaPara } = crearColumnas()
-    for (let idx = 0; idx < entradas.length; idx++) {
-      const entrada = entradas[idx]
-      const { x, guardar } = columnaPara(idx)
+    // Una sola columna a todo lo ancho: con dos columnas alternadas, una
+    // entrada larga en una columna forzaba el salto de página de LAS DOS
+    // aunque la otra todavía tuviera espacio libre — eso dejaba huecos en
+    // blanco y, en casos raros, partía un bloque entre página y columna.
+    // A una columna cada entrada solo depende de sí misma, sin ese riesgo.
+    for (const entrada of entradas) {
       await escribirBloqueEntrada({
         fechaIso: entrada.fecha,
         categoria: entrada.categoria,
         texto: entrada.texto,
         fotos: entrada.fotos,
-        obtenerX: () => x,
-        anchoDisponible: colW,
-        cols: 1,
-        salto,
+        obtenerX: () => margin,
+        anchoDisponible: contentW,
+        cols: entrada.fotos.length <= 1 ? 1 : 2,
+        salto: saltoDePaginaSiHaceFalta,
       })
-      guardar()
     }
   }
 
@@ -537,23 +499,19 @@ export async function generarPdfReporte({
     doc.text('Observaciones pendientes', margin, y)
     y += 26
 
-    const { colW, salto, columnaPara } = crearColumnas()
-    for (let idx = 0; idx < observacionesSinAtender.length; idx++) {
-      const obs = observacionesSinAtender[idx]
+    for (const obs of observacionesSinAtender) {
       const etiqueta = ETIQUETA_ESTADO_OBSERVACION[obs.estado] ?? obs.estado
-      const { x, guardar } = columnaPara(idx)
       await escribirBloqueEntrada({
         fechaIso: obs.fecha,
         sufijo: etiqueta,
         categoria: obs.categoria,
         texto: obs.texto,
         fotos: obs.fotos,
-        obtenerX: () => x,
-        anchoDisponible: colW,
-        cols: 1,
-        salto,
+        obtenerX: () => margin,
+        anchoDisponible: contentW,
+        cols: obs.fotos.length <= 1 ? 1 : 2,
+        salto: saltoDePaginaSiHaceFalta,
       })
-      guardar()
     }
   }
 

@@ -1345,22 +1345,35 @@ function useEntradasObra(obraId: string | null, tipo: TipoEntrada, online: boole
     if (subioAlguna) cargar()
   }
 
-  // Reintenta: al entrar a la obra, cuando el navegador avisa que volvió la
-  // señal, cada 20s mientras se está viendo esta lista (por si el aviso de
-  // "volvió la señal" no llega, algo común en celulares) y al regresar a la
-  // pestaña/app desde segundo plano.
+  // Reintenta subir lo pendiente Y refresca lo de los demás: al entrar a la
+  // obra, cuando el navegador avisa que volvió la señal, cada 20s mientras
+  // se está viendo esta lista (por si el aviso de "volvió la señal" no
+  // llega, algo común en celulares) y al regresar a la pestaña/app desde
+  // segundo plano. Sin este refresco, dos personas viendo la misma obra al
+  // mismo tiempo no se enteran de lo que la otra va agregando hasta volver a
+  // entrar a la obra — sus notas "no aparecen juntas" aunque sean de la
+  // misma semana, porque cada quien se quedó viendo su propia foto vieja.
   useEffect(() => {
-    if (online) intentarSubirCola()
+    if (online) {
+      intentarSubirCola()
+      cargar()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online, obraId, tipo])
 
   useEffect(() => {
     if (!obraId) return
     const intervalo = setInterval(() => {
-      if (navigator.onLine) intentarSubirCola()
+      if (navigator.onLine) {
+        intentarSubirCola()
+        cargar()
+      }
     }, 20000)
     function alVolverAlFrente() {
-      if (document.visibilityState === 'visible' && navigator.onLine) intentarSubirCola()
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        intentarSubirCola()
+        cargar()
+      }
     }
     document.addEventListener('visibilitychange', alVolverAlFrente)
     return () => {
